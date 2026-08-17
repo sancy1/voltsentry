@@ -1,0 +1,96 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+*.egg
+*.spec
+
+# PyInstaller
+*.pkg
+*.toc
+*.pyz
+base_library.zip
+warn-*.txt
+xref-*.html
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+voltsentry.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Configuration files (with sensitive data)
+config.json
+config.json.bak
+.env
+.env.local
+.env.*.local
+
+# Backups
+*.bak
+*.tmp
+*.vsbak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# pyenv
+.python-version
+
+# Project specific
+battery_report.xml
+pending_writes.jsonl
+heartbeat.json
+
+# Installer outputs
+installer/
+*.msi
+*.exe
+Setup*.exe
+*.iss

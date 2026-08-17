@@ -1,0 +1,23 @@
+# FILE: requirements-dev.txt
+# DESCRIPTION: Development dependencies for VoltSentry
+# PATH: voltsentry/requirements-dev.txt
+
+# VoltSentry Core Dependencies
+-r requirements.txt
+
+# Testing Frameworks
+pytest>=7.4.0
+pytest-mock>=3.11.0
+pytest-qt>=4.2.0
+pytest-cov>=4.1.0
+
+# Code Quality & Linting
+ruff>=0.1.0
+mypy>=1.5.0
+pre-commit>=3.5.0
+black>=23.0.0
+isort>=5.12.0
+
+# Development Tools
+jupyter>=1.0.0
+ipython>=8.0.0
