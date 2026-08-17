@@ -7,6 +7,7 @@ VoltSentry is a lightweight Windows desktop application that helps users monitor
 ---
 
 ## 📸 Preview
+<img width="1920" height="1020" alt="Dashbaord" src="https://github.com/user-attachments/assets/df537d70-103f-4311-ad49-2c2d2eb9b82a" />
 
 <p align="center">
   <img
