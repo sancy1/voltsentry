@@ -10,14 +10,6 @@ VoltSentry is a lightweight Windows desktop application that helps users monitor
 <img width="1920" height="1020" alt="Dashbaord" src="https://github.com/user-attachments/assets/df537d70-103f-4311-ad49-2c2d2eb9b82a" />
 
 <p align="center">
-  <img
-    src="src/voltsentry/resources/screenshots/Dashboard.png"
-    alt="VoltSentry Dashboard"
-    width="900"
-  >
-</p>
-
-<p align="center">
   <em>VoltSentry dashboard showing battery status, health information, and application controls.</em>
 </p>
 
