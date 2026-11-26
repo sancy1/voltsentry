@@ -156,6 +156,23 @@ class BaseRepository:
             logger.error("Failed to flush pending writes: %s", e)
             raise
 
+    def clear_all(self) -> int:
+        """
+        Delete all rows for this repository's model.
+
+        Returns:
+            Number of rows deleted.
+        """
+        if self.model is None:
+            raise DatabaseError("Repository has no model configured")
+
+        with self._session_scope() as session:
+            deleted = session.query(self.model).delete()
+            session.flush()
+
+        logger.info("Cleared %d rows from %s", deleted, self.model.__tablename__)
+        return deleted
+
     def _dict_to_entity(self, data: Dict[str, Any]):
         """Convert dict back to entity."""
         model_name = data.pop("_model", None)

@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QFrame,
     QComboBox,
+    QMessageBox,
 )
 
 from ..core.logging_config import get_logger
@@ -72,9 +73,9 @@ class HistoryLogView(QWidget):
 
         self._title_label = QLabel("📜 Battery History")
         self._title_label.setStyleSheet(f"""
-            font-size: {FONTS['size_medium']};
-            font-weight: {FONTS['weight_semibold']};
-            color: {COLORS['gray_700']};
+            font-size: {FONTS["size_medium"]};
+            font-weight: {FONTS["weight_semibold"]};
+            color: {COLORS["gray_700"]};
         """)
         control_layout.addWidget(self._title_label)
 
@@ -83,9 +84,7 @@ class HistoryLogView(QWidget):
         # Filter
         control_layout.addWidget(QLabel("Range:"))
         self._range_combo = QComboBox()
-        self._range_combo.addItems(
-            ["Last Day", "Last 7 Days", "Last 30 Days", "All Time"]
-        )
+        self._range_combo.addItems(["Last Day", "Last 7 Days", "Last 30 Days", "All Time"])
         self._range_combo.currentTextChanged.connect(self._on_range_changed)
         control_layout.addWidget(self._range_combo)
 
@@ -94,27 +93,30 @@ class HistoryLogView(QWidget):
         self._refresh_btn.clicked.connect(self.refresh)
         control_layout.addWidget(self._refresh_btn)
 
+        # Clear all history
+        self._clear_btn = QPushButton("🗑 Clear")
+        self._clear_btn.setObjectName("dangerButton")
+        self._clear_btn.setToolTip("Delete all battery history records")
+        self._clear_btn.clicked.connect(self._clear_history)
+        control_layout.addWidget(self._clear_btn)
+
         layout.addLayout(control_layout)
 
         # Table frame
         self._table_frame = QFrame()
         self._table_frame.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['gray_100']};
-                border-radius: {RADIUS['lg']}px;
+                background-color: {COLORS["gray_100"]};
+                border-radius: {RADIUS["lg"]}px;
             }}
         """)
         table_layout = QVBoxLayout(self._table_frame)
-        table_layout.setContentsMargins(
-            SPACING["md"], SPACING["md"], SPACING["md"], SPACING["md"]
-        )
+        table_layout.setContentsMargins(SPACING["md"], SPACING["md"], SPACING["md"], SPACING["md"])
 
         # Table
         self._table = QTableWidget()
         self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(
-            ["Time", "Battery %", "Status", "Source"]
-        )
+        self._table.setHorizontalHeaderLabels(["Time", "Battery %", "Status", "Source"])
         self._table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
@@ -124,31 +126,29 @@ class HistoryLogView(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents
         )
-        self._table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Stretch
-        )
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
         self._table.setStyleSheet(f"""
             QTableWidget {{
-                background-color: {COLORS['white']};
-                alternate-background-color: {COLORS['gray_100']};
-                gridline-color: {COLORS['gray_200']};
-                border: 1px solid {COLORS['gray_300']};
-                border-radius: {RADIUS['md']}px;
+                background-color: {COLORS["white"]};
+                alternate-background-color: {COLORS["gray_100"]};
+                gridline-color: {COLORS["gray_200"]};
+                border: 1px solid {COLORS["gray_300"]};
+                border-radius: {RADIUS["md"]}px;
             }}
             QTableWidget::item {{
                 padding: 8px;
             }}
             QTableWidget::item:selected {{
-                background-color: {COLORS['primary_light']};
-                color: {COLORS['primary']};
+                background-color: {COLORS["primary_light"]};
+                color: {COLORS["primary"]};
             }}
             QHeaderView::section {{
-                background-color: {COLORS['gray_200']};
+                background-color: {COLORS["gray_200"]};
                 padding: 8px;
                 border: none;
-                font-weight: {FONTS['weight_semibold']};
+                font-weight: {FONTS["weight_semibold"]};
             }}
         """)
         table_layout.addWidget(self._table)
@@ -157,8 +157,8 @@ class HistoryLogView(QWidget):
         self._placeholder_label = QLabel("📭 No data available yet")
         self._placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._placeholder_label.setStyleSheet(f"""
-            color: {COLORS['gray_500']};
-            font-size: {FONTS['size_medium']};
+            color: {COLORS["gray_500"]};
+            font-size: {FONTS["size_medium"]};
             padding: 40px;
         """)
         self._placeholder_label.hide()
@@ -178,8 +178,8 @@ class HistoryLogView(QWidget):
 
         self._page_label = QLabel("Page 1")
         self._page_label.setStyleSheet(f"""
-            font-weight: {FONTS['weight_medium']};
-            color: {COLORS['gray_700']};
+            font-weight: {FONTS["weight_medium"]};
+            color: {COLORS["gray_700"]};
         """)
         pagination_layout.addWidget(self._page_label)
 
@@ -246,12 +246,8 @@ class HistoryLogView(QWidget):
             self._show_data()
 
             # Update pagination
-            total_pages = max(
-                1, (self._total_records + self._page_size - 1) // self._page_size
-            )
-            self._page_label.setText(
-                f"Page {self._current_page + 1} of {total_pages}"
-            )
+            total_pages = max(1, (self._total_records + self._page_size - 1) // self._page_size)
+            self._page_label.setText(f"Page {self._current_page + 1} of {total_pages}")
             self._prev_btn.setEnabled(self._current_page > 0)
             self._next_btn.setEnabled(self._current_page < total_pages - 1)
             self._total_label.setText(f"Total: {self._total_records} records")
@@ -271,9 +267,7 @@ class HistoryLogView(QWidget):
 
         for i, reading in enumerate(self._data):
             # Time
-            time_item = QTableWidgetItem(
-                reading.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            )
+            time_item = QTableWidgetItem(reading.timestamp.strftime("%Y-%m-%d %H:%M:%S"))
             self._table.setItem(i, 0, time_item)
 
             # Battery %
@@ -306,6 +300,27 @@ class HistoryLogView(QWidget):
         self._next_btn.setEnabled(False)
         self._page_label.setText("Page 1 of 1")
 
+    def _clear_history(self) -> None:
+        """Delete all battery reading history after confirmation."""
+        reply = QMessageBox.question(
+            self,
+            "Clear History",
+            "Delete ALL battery history records? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            deleted = self._repository.clear_all()
+            self._current_page = 0
+            self.refresh()
+            logger.info("History cleared by user: %d records deleted", deleted)
+        except Exception as e:
+            logger.error("Failed to clear history: %s", e)
+            QMessageBox.warning(self, "Error", f"Failed to clear history: {e}")
+
     def _prev_page(self) -> None:
         """Go to previous page."""
         if self._current_page > 0:
@@ -314,9 +329,7 @@ class HistoryLogView(QWidget):
 
     def _next_page(self) -> None:
         """Go to next page."""
-        total_pages = (
-            self._total_records + self._page_size - 1
-        ) // self._page_size
+        total_pages = (self._total_records + self._page_size - 1) // self._page_size
         if self._current_page < total_pages - 1:
             self._current_page += 1
             self.refresh()

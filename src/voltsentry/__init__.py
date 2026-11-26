@@ -9,7 +9,7 @@ from .core.config import VoltSentrySettings, get_config
 from .core.exceptions import VoltSentryError
 from .core.logging_config import setup_logging
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __app_name__ = "VoltSentry"
 __app_id__ = "com.voltsentry.app"
 

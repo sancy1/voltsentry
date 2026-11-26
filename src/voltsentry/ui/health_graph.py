@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
     QFrame,
+    QMessageBox,
 )
 from PyQt6.QtGui import QFont
 
@@ -32,7 +33,11 @@ from matplotlib.figure import Figure
 
 from ..core.logging_config import get_logger
 from ..core.decorators import log_entry_exit
-from ..db.repositories import BatteryReadingRepository
+from ..db.repositories import (
+    BatteryReadingRepository,
+    ChargeCycleRepository,
+    CalibrationRepository,
+)
 from ..db.models import BatteryReading
 from .styles import COLORS, FONTS, RADIUS, SPACING
 
@@ -74,9 +79,9 @@ class HealthGraph(QWidget):
 
         self._title_label = QLabel("📈 Battery Health Trends")
         self._title_label.setStyleSheet(f"""
-            font-size: {FONTS['size_medium']};
-            font-weight: {FONTS['weight_semibold']};
-            color: {COLORS['gray_700']};
+            font-size: {FONTS["size_medium"]};
+            font-weight: {FONTS["weight_semibold"]};
+            color: {COLORS["gray_700"]};
         """)
         control_layout.addWidget(self._title_label)
 
@@ -98,27 +103,32 @@ class HealthGraph(QWidget):
         self._refresh_btn.clicked.connect(self.refresh)
         control_layout.addWidget(self._refresh_btn)
 
+        # Clear all health data
+        self._clear_btn = QPushButton("🗑 Clear")
+        self._clear_btn.setObjectName("dangerButton")
+        self._clear_btn.setToolTip("Delete all health data (readings, cycles, calibrations)")
+        self._clear_btn.clicked.connect(self._clear_health)
+        control_layout.addWidget(self._clear_btn)
+
         layout.addLayout(control_layout)
 
         # Graph frame
         self._graph_frame = QFrame()
         self._graph_frame.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['gray_100']};
-                border-radius: {RADIUS['lg']}px;
+                background-color: {COLORS["gray_100"]};
+                border-radius: {RADIUS["lg"]}px;
             }}
         """)
         graph_layout = QVBoxLayout(self._graph_frame)
-        graph_layout.setContentsMargins(
-            SPACING["md"], SPACING["md"], SPACING["md"], SPACING["md"]
-        )
+        graph_layout.setContentsMargins(SPACING["md"], SPACING["md"], SPACING["md"], SPACING["md"])
 
         # Placeholder for matplotlib canvas
         self._canvas_placeholder = QLabel("Loading graph...")
         self._canvas_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._canvas_placeholder.setStyleSheet(f"""
-            color: {COLORS['gray_500']};
-            font-size: {FONTS['size_medium']};
+            color: {COLORS["gray_500"]};
+            font-size: {FONTS["size_medium"]};
         """)
         graph_layout.addWidget(self._canvas_placeholder)
 
@@ -186,6 +196,34 @@ class HealthGraph(QWidget):
         except Exception as e:
             logger.error("Failed to refresh graph: %s", e)
             self._show_placeholder("⚠️ Graph temporarily unavailable")
+
+    def _clear_health(self) -> None:
+        """Delete all stored health data after confirmation."""
+        reply = QMessageBox.question(
+            self,
+            "Clear Health Data",
+            "Delete ALL battery readings, charge cycles, and calibration "
+            "records? Health tracking will start fresh. This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            readings_deleted = BatteryReadingRepository().clear_all()
+            cycles_deleted = ChargeCycleRepository().clear_all()
+            calibrations_deleted = CalibrationRepository().clear_all()
+            self.refresh()
+            logger.info(
+                "Health data cleared by user: %d readings, %d cycles, %d calibrations",
+                readings_deleted,
+                cycles_deleted,
+                calibrations_deleted,
+            )
+        except Exception as e:
+            logger.error("Failed to clear health data: %s", e)
+            QMessageBox.warning(self, "Error", f"Failed to clear health data: {e}")
 
     def _render_graph(self) -> None:
         """Render the graph with the current data."""

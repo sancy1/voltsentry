@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voltsentry"
-version = "1.1.0"
+version = "1.1.1"
 description = "Intelligent Battery Health Management System"
 readme = "README.md"
 requires-python = ">=3.9"
