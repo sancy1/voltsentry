@@ -898,7 +898,9 @@ class AlarmService:
         # Save to database (handle error gracefully)
         self._save_alarm_event(alarm_type)
 
-        if self.snooze_manager.is_quiet_hours():
+        # Quiet hours only mute the full-charge reminder.
+        # Low/critical battery alarms are safety alerts and always fire.
+        if alarm_type == AlarmType.FULL_CHARGE and self.snooze_manager.is_quiet_hours():
             logger.info("Alarm %s suppressed (quiet hours active)", alarm_type.value)
             return
 

@@ -232,7 +232,7 @@ if ENV_FILE.exists():
 # ============================================================================
 APP_NAME = os.getenv("APP_NAME", "VoltSentry")
 APP_ID = os.getenv("APP_ID", "com.voltsentry.app")
-APP_VERSION = os.getenv("APP_VERSION", "1.1.1")
+APP_VERSION = os.getenv("APP_VERSION", "1.1.2")
 APP_ENV = os.getenv("APP_ENV", "development")
 DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 
