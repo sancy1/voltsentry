@@ -3,11 +3,12 @@ FILE: src/voltsentry/db/repositories.py
 PATH: voltsentry/src/voltsentry/db/repositories.py
 DESCRIPTION: Repository pattern for database operations - DRY data access
 """
+
 import json
-from pathlib import Path
+from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Union
-from sqlalchemy import desc, and_, func
+from typing import Iterator, Optional, List, Dict, Any
+from sqlalchemy import desc, func
 from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,7 @@ from .models import (
     CalibrationRecord,
     AutomationHookLog,
 )
-from .session import get_session
+from .session import SessionLocal, get_session
 from ..core.constants import DB_PENDING_QUEUE
 from ..core.exceptions import DatabaseError, EntityNotFoundError
 from ..core.logging_config import get_logger
@@ -34,7 +35,7 @@ logger = get_logger(__name__)
 class BaseRepository:
     """
     Base repository with common CRUD operations.
-    
+
     All repositories inherit from this class to avoid code duplication.
     Handles:
     - Save with retry and fallback
@@ -55,18 +56,36 @@ class BaseRepository:
             raise DatabaseError("No session available, use context manager")
         return self._session
 
+    @contextmanager
+    def _session_scope(self) -> Iterator[Session]:
+        """Yield an explicit session or a short-lived managed session."""
+        if self._session is not None:
+            yield self._session
+            return
+
+        session = SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
     @timed()
     @resilient(exceptions=(OperationalError,), attempts=3)
     def save(self, entity) -> None:
         """
         Save an entity to database with automatic retry.
-        
+
         If all retries fail, the entity is queued to disk.
         """
         try:
-            self.session.add(entity)
-            self.session.flush()
-            logger.debug("Saved %s (id=%s)", type(entity).__name__, getattr(entity, 'id', None))
+            with self._session_scope() as session:
+                session.add(entity)
+                session.flush()
+            logger.debug("Saved %s (id=%s)", type(entity).__name__, getattr(entity, "id", None))
         except (OperationalError, IntegrityError) as e:
             logger.error("Failed to save %s: %s", type(entity).__name__, e)
             self._queue_to_disk(entity)
@@ -97,34 +116,45 @@ class BaseRepository:
     def flush_pending(self) -> int:
         """
         Flush pending writes from disk queue to database.
-        
+
         Called on application startup to replay queued writes.
         """
         if not self._pending_queue.exists():
             return 0
 
         count = 0
-        with self.session.begin():
-            try:
-                with open(self._pending_queue, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
+        if self._session is not None:
+            with self.session.begin():
+                count = self._replay_pending_queue()
+        else:
+            with get_session() as session:
+                count = self._replay_pending_queue(session)
+        return count
 
-                for line in lines:
-                    try:
-                        data = json.loads(line.strip())
-                        entity = self._dict_to_entity(data)
-                        self.session.add(entity)
-                        count += 1
-                    except Exception as e:
-                        logger.error("Failed to replay queued write: %s", e)
+    def _replay_pending_queue(self, session: Optional[Session] = None) -> int:
+        """Replay queued entities using the provided or managed session."""
+        active_session = session or self.session
+        count = 0
+        try:
+            with open(self._pending_queue, "r", encoding="utf-8") as f:
+                lines = f.readlines()
 
-                # Clear file on success
-                self._pending_queue.unlink(missing_ok=True)
-                logger.info("Flushed %d pending writes", count)
-                return count
-            except Exception as e:
-                logger.error("Failed to flush pending writes: %s", e)
-                raise
+            for line in lines:
+                try:
+                    data = json.loads(line.strip())
+                    entity = self._dict_to_entity(data)
+                    active_session.add(entity)
+                    count += 1
+                except Exception as e:
+                    logger.error("Failed to replay queued write: %s", e)
+
+            # Clear file on success
+            self._pending_queue.unlink(missing_ok=True)
+            logger.info("Flushed %d pending writes", count)
+            return count
+        except Exception as e:
+            logger.error("Failed to flush pending writes: %s", e)
+            raise
 
     def _dict_to_entity(self, data: Dict[str, Any]):
         """Convert dict back to entity."""
@@ -166,9 +196,8 @@ class BatteryReadingRepository(BaseRepository):
 
     def get_latest(self) -> Optional[BatteryReading]:
         """Get the most recent battery reading."""
-        return self.session.query(BatteryReading).order_by(
-            desc(BatteryReading.timestamp)
-        ).first()
+        with self._session_scope() as session:
+            return session.query(BatteryReading).order_by(desc(BatteryReading.timestamp)).first()
 
     def get_history(
         self,
@@ -187,24 +216,26 @@ class BatteryReadingRepository(BaseRepository):
         Returns:
             List of BatteryReading objects, newest first
         """
-        query = self.session.query(BatteryReading)
+        with self._session_scope() as session:
+            query = session.query(BatteryReading)
 
-        if from_date:
-            query = query.filter(BatteryReading.timestamp >= from_date)
-        if to_date:
-            query = query.filter(BatteryReading.timestamp <= to_date)
+            if from_date:
+                query = query.filter(BatteryReading.timestamp >= from_date)
+            if to_date:
+                query = query.filter(BatteryReading.timestamp <= to_date)
 
-        return query.order_by(desc(BatteryReading.timestamp)).limit(limit).all()
+            return query.order_by(desc(BatteryReading.timestamp)).limit(limit).all()
 
     def get_average_percent(self, days: int = 7) -> Optional[float]:
         """Get average battery percentage over the last N days."""
         from_date = datetime.now() - timedelta(days=days)
 
-        result = self.session.query(
-            func.avg(BatteryReading.percent)
-        ).filter(
-            BatteryReading.timestamp >= from_date
-        ).scalar()
+        with self._session_scope() as session:
+            result = (
+                session.query(func.avg(BatteryReading.percent))
+                .filter(BatteryReading.timestamp >= from_date)
+                .scalar()
+            )
 
         return float(result) if result is not None else None
 
@@ -221,13 +252,18 @@ class BatteryReadingRepository(BaseRepository):
         }
 
         result = {}
-        for label, (low, high) in bins.items():
-            count = self.session.query(BatteryReading).filter(
-                BatteryReading.timestamp >= from_date,
-                BatteryReading.percent >= low,
-                BatteryReading.percent < high,
-            ).count()
-            result[label] = float(count)
+        with self._session_scope() as session:
+            for label, (low, high) in bins.items():
+                count = (
+                    session.query(BatteryReading)
+                    .filter(
+                        BatteryReading.timestamp >= from_date,
+                        BatteryReading.percent >= low,
+                        BatteryReading.percent < high,
+                    )
+                    .count()
+                )
+                result[label] = float(count)
 
         return result
 
@@ -239,16 +275,19 @@ class ChargeCycleRepository(BaseRepository):
 
     def get_total_cycles(self) -> float:
         """Get total cycle count."""
-        result = self.session.query(
-            func.sum(ChargeCycleEvent.cycle_fraction)
-        ).scalar()
+        with self._session_scope() as session:
+            result = session.query(func.sum(ChargeCycleEvent.cycle_fraction)).scalar()
         return float(result) if result is not None else 0.0
 
     def get_cycle_history(self, limit: int = 100) -> List[ChargeCycleEvent]:
         """Get recent charge cycle history."""
-        return self.session.query(ChargeCycleEvent).order_by(
-            desc(ChargeCycleEvent.started_at)
-        ).limit(limit).all()
+        with self._session_scope() as session:
+            return (
+                session.query(ChargeCycleEvent)
+                .order_by(desc(ChargeCycleEvent.started_at))
+                .limit(limit)
+                .all()
+            )
 
 
 class AlarmEventRepository(BaseRepository):
@@ -264,14 +303,13 @@ class AlarmEventRepository(BaseRepository):
         """Get alarm count filtered by type and days."""
         from_date = datetime.now() - timedelta(days=days)
 
-        query = self.session.query(AlarmEvent).filter(
-            AlarmEvent.timestamp >= from_date
-        )
+        with self._session_scope() as session:
+            query = session.query(AlarmEvent).filter(AlarmEvent.timestamp >= from_date)
 
-        if alarm_type:
-            query = query.filter(AlarmEvent.alarm_type == alarm_type)
+            if alarm_type:
+                query = query.filter(AlarmEvent.alarm_type == alarm_type)
 
-        return query.count()
+            return query.count()
 
     def get_alarm_history(
         self,
@@ -279,28 +317,32 @@ class AlarmEventRepository(BaseRepository):
         limit: int = 100,
     ) -> List[AlarmEvent]:
         """Get recent alarm history."""
-        query = self.session.query(AlarmEvent)
+        with self._session_scope() as session:
+            query = session.query(AlarmEvent)
 
-        if alarm_type:
-            query = query.filter(AlarmEvent.alarm_type == alarm_type)
+            if alarm_type:
+                query = query.filter(AlarmEvent.alarm_type == alarm_type)
 
-        return query.order_by(desc(AlarmEvent.timestamp)).limit(limit).all()
+            return query.order_by(desc(AlarmEvent.timestamp)).limit(limit).all()
 
     def get_snooze_rate(self, days: int = 30) -> float:
         """Get the rate at which alarms are snoozed."""
         from_date = datetime.now() - timedelta(days=days)
 
-        total = self.session.query(AlarmEvent).filter(
-            AlarmEvent.timestamp >= from_date
-        ).count()
+        with self._session_scope() as session:
+            total = session.query(AlarmEvent).filter(AlarmEvent.timestamp >= from_date).count()
 
-        if total == 0:
-            return 0.0
+            if total == 0:
+                return 0.0
 
-        snoozed = self.session.query(AlarmEvent).filter(
-            AlarmEvent.timestamp >= from_date,
-            AlarmEvent.snoozed.is_(True),
-        ).count()
+            snoozed = (
+                session.query(AlarmEvent)
+                .filter(
+                    AlarmEvent.timestamp >= from_date,
+                    AlarmEvent.snoozed.is_(True),
+                )
+                .count()
+            )
 
         return snoozed / total
 
@@ -312,30 +354,44 @@ class CalibrationRepository(BaseRepository):
 
     def get_latest_calibration(self) -> Optional[CalibrationRecord]:
         """Get the most recent calibration record."""
-        return self.session.query(CalibrationRecord).order_by(
-            desc(CalibrationRecord.started_at)
-        ).first()
+        with self._session_scope() as session:
+            return (
+                session.query(CalibrationRecord)
+                .order_by(desc(CalibrationRecord.started_at))
+                .first()
+            )
 
     def get_completed_calibrations(self) -> List[CalibrationRecord]:
         """Get all completed calibrations."""
-        return self.session.query(CalibrationRecord).filter(
-            CalibrationRecord.state == "complete"
-        ).order_by(desc(CalibrationRecord.completed_at)).all()
+        with self._session_scope() as session:
+            return (
+                session.query(CalibrationRecord)
+                .filter(CalibrationRecord.state == "complete")
+                .order_by(desc(CalibrationRecord.completed_at))
+                .all()
+            )
 
     def get_aborted_calibrations(self) -> List[CalibrationRecord]:
         """Get all aborted calibrations."""
-        return self.session.query(CalibrationRecord).filter(
-            CalibrationRecord.state == "aborted"
-        ).order_by(desc(CalibrationRecord.started_at)).all()
+        with self._session_scope() as session:
+            return (
+                session.query(CalibrationRecord)
+                .filter(CalibrationRecord.state == "aborted")
+                .order_by(desc(CalibrationRecord.started_at))
+                .all()
+            )
 
     def get_best_health_score(self) -> Optional[int]:
         """Get the best health score from any completed calibration."""
-        result = self.session.query(
-            func.max(CalibrationRecord.result_health_score)
-        ).filter(
-            CalibrationRecord.state == "complete",
-            CalibrationRecord.result_health_score.isnot(None),
-        ).scalar()
+        with self._session_scope() as session:
+            result = (
+                session.query(func.max(CalibrationRecord.result_health_score))
+                .filter(
+                    CalibrationRecord.state == "complete",
+                    CalibrationRecord.result_health_score.isnot(None),
+                )
+                .scalar()
+            )
 
         return int(result) if result is not None else None
 
@@ -353,18 +409,20 @@ class AutomationHookRepository(BaseRepository):
         """Get success rate for automation hooks."""
         from_date = datetime.now() - timedelta(days=days)
 
-        query = self.session.query(AutomationHookLog).filter(
-            AutomationHookLog.timestamp >= from_date
-        )
+        with self._session_scope() as session:
+            query = session.query(AutomationHookLog).filter(
+                AutomationHookLog.timestamp >= from_date
+            )
 
-        if hook_type:
-            query = query.filter(AutomationHookLog.hook_type == hook_type)
+            if hook_type:
+                query = query.filter(AutomationHookLog.hook_type == hook_type)
 
-        total = query.count()
-        if total == 0:
-            return 0.0
+            total = query.count()
+            if total == 0:
+                return 0.0
 
-        successes = query.filter(AutomationHookLog.success.is_(True)).count()
+            successes = query.filter(AutomationHookLog.success.is_(True)).count()
+
         return successes / total
 
     def get_recent_failures(
@@ -372,9 +430,14 @@ class AutomationHookRepository(BaseRepository):
         limit: int = 10,
     ) -> List[AutomationHookLog]:
         """Get recent hook failures."""
-        return self.session.query(AutomationHookLog).filter(
-            AutomationHookLog.success.is_(False)
-        ).order_by(desc(AutomationHookLog.timestamp)).limit(limit).all()
+        with self._session_scope() as session:
+            return (
+                session.query(AutomationHookLog)
+                .filter(AutomationHookLog.success.is_(False))
+                .order_by(desc(AutomationHookLog.timestamp))
+                .limit(limit)
+                .all()
+            )
 
 
 # ============================================================================

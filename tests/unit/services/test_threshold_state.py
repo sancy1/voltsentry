@@ -76,9 +76,10 @@ class TestThresholdStateMachine:
         # Should stay in FULL_ALARM due to hysteresis
         assert state == ThresholdState.FULL_ALARM
 
-        # Drop below hysteresis margin
+        # Drop below hysteresis margin and approaching-full window
         state = state_machine.update(81, True)
-        assert state == ThresholdState.APPROACHING_FULL
+        assert state == ThresholdState.NORMAL
+        assert state_machine.is_alarm_active is False
 
     def test_hysteresis_low_alarm(self, state_machine: ThresholdStateMachine) -> None:
         """Test hysteresis prevents flapping for LOW_ALARM."""
@@ -91,9 +92,10 @@ class TestThresholdStateMachine:
         # Should stay in LOW_ALARM due to hysteresis
         assert state == ThresholdState.LOW_ALARM
 
-        # Rise above hysteresis margin
+        # Rise above hysteresis margin and approaching-low window
         state = state_machine.update(24, False)
-        assert state == ThresholdState.APPROACHING_LOW
+        assert state == ThresholdState.NORMAL
+        assert state_machine.is_alarm_active is False
 
     def test_critical_low_priority(self, state_machine: ThresholdStateMachine) -> None:
         """Test CRITICAL_LOW has highest priority."""
@@ -127,10 +129,10 @@ class TestThresholdStateMachine:
         state = state_machine.update(20, False)
         assert state == ThresholdState.LOW_ALARM
 
-        # Start charging
+        # Start charging at a non-approaching level
         state = state_machine.update(21, True)
-        # Should exit alarm state
-        assert state == ThresholdState.APPROACHING_FULL
+        # Should exit alarm state to NORMAL
+        assert state == ThresholdState.NORMAL
         assert state_machine.is_alarm_active is False
 
     def test_reset(self, state_machine: ThresholdStateMachine) -> None:

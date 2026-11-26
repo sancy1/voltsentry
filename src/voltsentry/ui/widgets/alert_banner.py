@@ -209,36 +209,6 @@
 #         self._message_label.setText(message)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
 FILE: src/voltsentry/ui/widgets/alert_banner.py
 PATH: voltsentry/src/voltsentry/ui/widgets/alert_banner.py
@@ -308,16 +278,16 @@ class AlertBanner(QFrame):
         self._icon_label = QLabel(icon)
         self._icon_label.setStyleSheet(f"font-size: {FONTS['size_large']};")
         self._icon_label.setFixedWidth(30)
-        layout.addWidget(self._icon_label)
+        layout.addWidget(self._icon_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # Message - with word wrap!
         self._message_label = QLabel(self._message)
         self._message_label.setWordWrap(True)
         self._message_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._message_label.setStyleSheet(f"""
-            font-size: {FONTS['size_normal']};
-            font-weight: {FONTS['weight_medium']};
-            color: {COLORS['gray_900']};
+            font-size: {FONTS["size_normal"]};
+            font-weight: {FONTS["weight_medium"]};
+            color: {COLORS["gray_900"]};
         """)
         layout.addWidget(self._message_label, 1)
 
@@ -327,7 +297,7 @@ class AlertBanner(QFrame):
         self._snooze_button.clicked.connect(self.snoozed.emit)
         self._snooze_button.setFixedHeight(32)
         self._snooze_button.setVisible(self._show_snooze)
-        layout.addWidget(self._snooze_button)
+        layout.addWidget(self._snooze_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
         # Dismiss button
         self._dismiss_button = QPushButton("✕")
@@ -336,16 +306,16 @@ class AlertBanner(QFrame):
             QPushButton {{
                 background: transparent;
                 border: none;
-                font-size: {FONTS['size_medium']};
-                color: {COLORS['gray_500']};
-                border-radius: {RADIUS['circle']}px;
+                font-size: {FONTS["size_medium"]};
+                color: {COLORS["gray_500"]};
+                border-radius: {RADIUS["circle"]}px;
             }}
             QPushButton:hover {{
-                background: {COLORS['gray_300']};
+                background: {COLORS["gray_300"]};
             }}
         """)
         self._dismiss_button.clicked.connect(self.dismiss)
-        layout.addWidget(self._dismiss_button)
+        layout.addWidget(self._dismiss_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def _apply_styles(self) -> None:
         """Apply alert type-specific styles."""
@@ -368,9 +338,9 @@ class AlertBanner(QFrame):
         self.setStyleSheet(f"""
             AlertBanner {{
                 background-color: {bg};
-                border-radius: {RADIUS['lg']}px;
+                border-radius: {RADIUS["lg"]}px;
                 border-left: 4px solid {border};
-                margin: {SPACING['sm']}px 0;
+                margin: {SPACING["sm"]}px 0;
                 min-height: 40px;
             }}
         """)

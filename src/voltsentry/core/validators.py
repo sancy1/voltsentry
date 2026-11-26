@@ -5,10 +5,11 @@
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from voltsentry.core.constants import MAX_CUSTOM_SOUND_SIZE, SUPPORTED_AUDIO_EXTENSIONS
 from voltsentry.core.exceptions import ValidationError
+
 
 # ============================================================================
 # Battery Validators
@@ -35,6 +36,7 @@ def validate_threshold_pair(high: int, low: int, min_gap: int = 10) -> tuple[int
 
     Raises:
         ValidationError: If thresholds invalid
+
     """
     high = validate_percent(high)
     low = validate_percent(low)
@@ -70,6 +72,7 @@ def validate_time_format(
 
     Raises:
         ValidationError: If format invalid
+
     """
     if not isinstance(time_str, str):
         raise ValidationError(f"Time must be string, got {type(time_str).__name__}")
@@ -85,7 +88,7 @@ def validate_quiet_hours(start: str, end: str) -> tuple[str, str]:
     start = validate_time_format(start)
     end = validate_time_format(end)
 
-    if start == end:
+    if start == end and not (start == "00:00" and end == "00:00"):
         raise ValidationError("Quiet hours start and end times cannot be identical")
 
     return start, end
@@ -114,7 +117,7 @@ def validate_audio_file(path: Union[str, Path]) -> Path:
     - File exists
     - File extension is supported
     - File size <= MAX_CUSTOM_SOUND_SIZE
-    - File has valid audio header
+    - File is not empty
     """
     path_obj = validate_file_exists(path)
 
@@ -130,33 +133,16 @@ def validate_audio_file(path: Union[str, Path]) -> Path:
     if size > MAX_CUSTOM_SOUND_SIZE:
         max_mb = MAX_CUSTOM_SOUND_SIZE / (1024 * 1024)
         actual_mb = size / (1024 * 1024)
-        raise ValidationError(
-            f"File too large: {actual_mb:.1f} MB (max {max_mb:.0f} MB)"
-        )
+        raise ValidationError(f"File too large: {actual_mb:.1f} MB (max {max_mb:.0f} MB)")
 
-    # Basic audio header check (first 4 bytes)
+    # Reject empty files; actual decodability is handled by the player
     with open(path_obj, "rb") as f:
         header = f.read(4)
 
     if len(header) < 2:
         raise ValidationError("Audio file is empty or corrupted")
 
-    # Magic numbers for audio formats
-    valid_headers = (
-        b"RIFF",  # WAV
-        b"RIFX",  # Big-endian WAV
-        b"ID3",   # MP3 with ID3 tag
-        b"OggS",  # OGG container
-    )
-
-    if any(header.startswith(h) for h in valid_headers):
-        return path_obj
-
-    # Check raw MP3 frame sync bytes (11 bits set: 0xFF, 0xE0 mask)
-    if len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0:
-        return path_obj
-
-    raise ValidationError("Invalid or corrupted audio file signature")
+    return path_obj
 
 
 def validate_config_json(data: dict[str, Any]) -> dict[str, Any]:

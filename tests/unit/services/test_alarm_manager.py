@@ -5,8 +5,6 @@ DESCRIPTION: Unit tests for Dual Alarm Sound System (AlarmManager)
 PHASE: 3.2 - Dual Alarm Sound System
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,7 +12,6 @@ import pytest
 from voltsentry.services.alarm_manager import (
     ALARM_PROFILES,
     AlarmManager,
-    AlarmProfile,
     AlarmType,
 )
 
@@ -46,7 +43,9 @@ class TestAlarmManager:
     @pytest.fixture
     def mock_pygame_mixer(self):
         """Mock pygame.mixer module to prevent actual audio hardware access."""
-        with patch("voltsentry.services.alarm_manager.pygame.mixer") as mock_mixer:
+        import pygame.mixer  # noqa: F401 - ensure pygame.mixer attribute exists
+
+        with patch("pygame.mixer") as mock_mixer:
             mock_mixer.init.return_value = None
             mock_mixer.music = MagicMock()
             yield mock_mixer
@@ -66,13 +65,13 @@ class TestAlarmManager:
         assert alarm_manager.active_alarm is None
         assert alarm_manager.volume == 0.7
 
-    @patch("voltsentry.services.alarm_manager.pygame.mixer.init")
-    def test_initialization_pygame_failure(self, mock_init):
+    def test_initialization_pygame_failure(self):
         """Test initialization fallback when pygame init raises pygame.error."""
         import pygame
+        import pygame.mixer  # noqa: F401
 
-        mock_init.side_effect = pygame.error("No audio device")
-        manager = AlarmManager(volume=0.5)
+        with patch.object(pygame.mixer, "init", side_effect=pygame.error("No audio device")):
+            manager = AlarmManager(volume=0.5)
 
         assert manager.is_audio_available() is False
         assert manager.is_playing is False
@@ -142,31 +141,30 @@ class TestAlarmManager:
     def test_fallback_to_winsound(self, mock_pygame_mixer):
         """Test fallback to OS winsound when pygame fails/is unavailable."""
         manager = AlarmManager()
-        manager._audio_ok = False  # Simulate pygame failure
+        manager._pygame_available = False
 
         mock_winsound = MagicMock()
-
-        with patch("sys.platform", "win32"), patch.dict("sys.modules", {"winsound": mock_winsound}):
+        with patch.dict("sys.modules", {"winsound": mock_winsound}):
             result = manager.play(AlarmType.LOW_BATTERY)
 
-            assert result is True
-            mock_winsound.MessageBeep.assert_called_once_with(0x00000030)
-            assert manager.is_playing is True
+        assert result is True
+        assert mock_winsound.Beep.call_count == 2
+        assert manager.is_playing is True
 
     def test_fallback_to_visual_only(self, mock_pygame_mixer):
         """Test final fallback to visual-only callback when audio and OS beeps are unavailable."""
         manager = AlarmManager()
-        manager._audio_ok = False
+        manager._pygame_available = False
 
         visual_callback = MagicMock()
         manager.set_visual_only_callback(visual_callback)
 
-        with patch("sys.platform", "linux"), patch.dict("sys.modules", {"winsound": None}):
+        with patch.dict("sys.modules", {"winsound": None}):
             result = manager.play(AlarmType.LOW_BATTERY)
 
-            assert result is True
-            visual_callback.assert_called_once_with(AlarmType.LOW_BATTERY)
-            assert manager.is_playing is True
+        assert result is True
+        visual_callback.assert_called_once_with(AlarmType.LOW_BATTERY)
+        assert manager.is_playing is True
 
     @patch("voltsentry.services.alarm_manager.Path.exists", return_value=True)
     def test_stop_alarm(self, mock_exists, alarm_manager, mock_pygame_mixer):
@@ -186,6 +184,5 @@ class TestAlarmManager:
 
         assert status["is_playing"] is False
         assert status["active_alarm"] is None
-        assert status["audio_ok"] is True
-        assert status["pygame_initialized"] is True
+        assert status["pygame_available"] is True
         assert status["volume"] == 0.7

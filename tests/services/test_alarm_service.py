@@ -12,17 +12,21 @@ from voltsentry.services.alarm_service import AlarmService
 @pytest.fixture
 def mock_dependencies():
     """Patch all underlying managers and repositories created in AlarmService.__init__."""
-    with patch("voltsentry.services.alarm_service.get_config") as mock_get_config, \
-         patch("voltsentry.services.alarm_service.AlarmManager") as mock_alarm_mgr_cls, \
-         patch("voltsentry.services.alarm_service.NotificationManager") as mock_notif_mgr_cls, \
-         patch("voltsentry.services.alarm_service.SnoozeManager") as mock_snooze_mgr_cls, \
-         patch("voltsentry.services.alarm_service.AlarmEventRepository") as mock_repo_cls:
-
+    with (
+        patch("voltsentry.services.alarm_service.get_config") as mock_get_config,
+        patch("voltsentry.services.alarm_service.AlarmManager") as mock_alarm_mgr_cls,
+        patch("voltsentry.services.alarm_service.NotificationManager") as mock_notif_mgr_cls,
+        patch("voltsentry.services.alarm_service.SnoozeManager") as mock_snooze_mgr_cls,
+        patch("voltsentry.services.alarm_service.AlarmEventRepository") as mock_repo_cls,
+    ):
         # Explicitly configure default settings mock values
         mock_settings = MagicMock()
         mock_settings.charge_threshold_high = 80
         mock_settings.charge_threshold_low = 20
         mock_settings.alarm_volume = 100
+        mock_settings.quiet_hours_start = "00:00"
+        mock_settings.quiet_hours_end = "00:00"
+        mock_settings.custom_alarm_path = None
         mock_settings.custom_full_sound = None
         mock_settings.custom_low_sound = None
         mock_get_config.return_value.settings = mock_settings

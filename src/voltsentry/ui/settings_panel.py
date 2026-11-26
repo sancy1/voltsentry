@@ -382,37 +382,6 @@
 #             logger.info("Settings reset to defaults")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # """
 # FILE: src/voltsentry/ui/settings_panel.py
 # PATH: voltsentry/src/voltsentry/ui/settings_panel.py
@@ -799,52 +768,6 @@
 #             self._status_label.setText("↩️ Settings reset to defaults")
 #             self._status_label.setStyleSheet(f"color: {COLORS['warning']}; padding: {SPACING['sm']}px;")
 #             logger.info("Settings reset to defaults")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # """
@@ -1235,61 +1158,6 @@
 #             self._status_label.setText("↩️ Settings reset to defaults")
 #             self._status_label.setStyleSheet(f"color: {COLORS['warning']}; padding: {SPACING['sm']}px;")
 #             logger.info("Settings reset to defaults")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # """
@@ -1744,51 +1612,6 @@
 #             self._status_label.setText("↩️ Settings reset to defaults")
 #             self._status_label.setStyleSheet(f"color: {COLORS['warning']}; padding: {SPACING['sm']}px;")
 #             logger.info("Settings reset to defaults")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # """
@@ -2267,76 +2090,6 @@
 #             self._status_label.setText("↩️ Settings reset to defaults")
 #             self._status_label.setStyleSheet(f"color: {COLORS['warning']}; padding: {SPACING['sm']}px;")
 #             logger.info("Settings reset to defaults")
-            
-            
-            
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 """
@@ -2351,6 +2104,8 @@ DISCIPLINES:
 - 0.4 Fallback: Previous settings remain active on invalid input
 """
 
+import shutil
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -2368,21 +2123,28 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QSizePolicy,
     QScrollArea,
+    QLineEdit,
+    QFileDialog,
 )
 
 from ..core.config import GlobalConfig
+from ..core.exceptions import ValidationError
 from ..core.logging_config import get_logger
 from ..core.decorators import log_entry_exit
-from ..core.validators import validate_threshold_pair
+from ..core.validators import (
+    validate_audio_file,
+    validate_quiet_hours,
+    validate_threshold_pair,
+)
 from ..core.constants import (
+    DATA_DIR,
     DEFAULT_CHARGE_THRESHOLD_HIGH,
     DEFAULT_CHARGE_THRESHOLD_LOW,
-    DEFAULT_QUIET_HOURS_START,
-    DEFAULT_QUIET_HOURS_END,
+    SUPPORTED_AUDIO_EXTENSIONS,
 )
 from ..services.alarm_service import AlarmService
 from ..utils.startup_utils import set_auto_start, is_auto_start_enabled
-from .styles import COLORS, FONTS, SPACING, RADIUS
+from .styles import COLORS, FONTS, SPACING
 
 logger = get_logger(__name__)
 
@@ -2431,7 +2193,7 @@ class SettingsPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        
+
         # Content widget
         content = QWidget()
         layout = QVBoxLayout(content)
@@ -2465,9 +2227,9 @@ class SettingsPanel(QWidget):
         self._high_label.setFixedWidth(40)
         self._high_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._high_label.setStyleSheet(f"""
-            font-weight: {FONTS['weight_bold']};
-            color: {COLORS['primary']};
-            font-size: {FONTS['size_normal']};
+            font-weight: {FONTS["weight_bold"]};
+            color: {COLORS["primary"]};
+            font-size: {FONTS["size_normal"]};
         """)
         high_layout.addWidget(self._high_label)
         threshold_layout.addLayout(high_layout)
@@ -2491,9 +2253,9 @@ class SettingsPanel(QWidget):
         self._low_label.setFixedWidth(40)
         self._low_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._low_label.setStyleSheet(f"""
-            font-weight: {FONTS['weight_bold']};
-            color: {COLORS['warning']};
-            font-size: {FONTS['size_normal']};
+            font-weight: {FONTS["weight_bold"]};
+            color: {COLORS["warning"]};
+            font-size: {FONTS["size_normal"]};
         """)
         low_layout.addWidget(self._low_label)
         threshold_layout.addLayout(low_layout)
@@ -2501,7 +2263,9 @@ class SettingsPanel(QWidget):
         # Validation message
         self._validation_msg = QLabel("")
         self._validation_msg.setWordWrap(True)
-        self._validation_msg.setStyleSheet(f"color: {COLORS['danger']}; padding: {SPACING['xs']}px; font-size: {FONTS['size_small']};")
+        self._validation_msg.setStyleSheet(
+            f"color: {COLORS['danger']}; padding: {SPACING['xs']}px; font-size: {FONTS['size_small']};"
+        )
         self._validation_msg.setVisible(False)
         threshold_layout.addWidget(self._validation_msg)
 
@@ -2509,9 +2273,9 @@ class SettingsPanel(QWidget):
         info_label = QLabel("💡 Keep 10% gap between thresholds")
         info_label.setWordWrap(True)
         info_label.setStyleSheet(f"""
-            font-size: {FONTS['size_small']};
-            color: {COLORS['gray_500']};
-            padding: {SPACING['xs']}px;
+            font-size: {FONTS["size_small"]};
+            color: {COLORS["gray_500"]};
+            padding: {SPACING["xs"]}px;
         """)
         threshold_layout.addWidget(info_label)
 
@@ -2551,26 +2315,75 @@ class SettingsPanel(QWidget):
         quiet_info = QLabel("💡 Alarms silent during quiet hours")
         quiet_info.setWordWrap(True)
         quiet_info.setStyleSheet(f"""
-            font-size: {FONTS['size_small']};
-            color: {COLORS['gray_500']};
-            padding: {SPACING['xs']}px;
+            font-size: {FONTS["size_small"]};
+            color: {COLORS["gray_500"]};
+            padding: {SPACING["xs"]}px;
         """)
         quiet_layout.addWidget(quiet_info)
 
         layout.addWidget(quiet_group)
 
         # ============================================================
+        # Custom Alarm Sounds
+        # ============================================================
+        audio_group = QGroupBox("🔊 Alarm Sounds")
+        audio_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        audio_layout = QVBoxLayout(audio_group)
+        audio_layout.setSpacing(SPACING["sm"])
+
+        full_sound_row = QHBoxLayout()
+        full_sound_row.setSpacing(SPACING["sm"])
+        full_sound_row.addWidget(QLabel("Full:"))
+        self._full_sound_path = QLineEdit()
+        self._full_sound_path.setReadOnly(True)
+        self._full_sound_path.setPlaceholderText("Default full-charge alarm")
+        full_sound_row.addWidget(self._full_sound_path, 1)
+        self._full_sound_browse = QPushButton("Choose…")
+        self._full_sound_browse.clicked.connect(lambda: self._browse_sound("full"))
+        full_sound_row.addWidget(self._full_sound_browse)
+        self._full_sound_clear = QPushButton("Clear")
+        self._full_sound_clear.clicked.connect(lambda: self._clear_sound("full"))
+        full_sound_row.addWidget(self._full_sound_clear)
+        audio_layout.addLayout(full_sound_row)
+
+        low_sound_row = QHBoxLayout()
+        low_sound_row.setSpacing(SPACING["sm"])
+        low_sound_row.addWidget(QLabel("Low:"))
+        self._low_sound_path = QLineEdit()
+        self._low_sound_path.setReadOnly(True)
+        self._low_sound_path.setPlaceholderText("Default low-battery alarm")
+        low_sound_row.addWidget(self._low_sound_path, 1)
+        self._low_sound_browse = QPushButton("Choose…")
+        self._low_sound_browse.clicked.connect(lambda: self._browse_sound("low"))
+        low_sound_row.addWidget(self._low_sound_browse)
+        self._low_sound_clear = QPushButton("Clear")
+        self._low_sound_clear.clicked.connect(lambda: self._clear_sound("low"))
+        low_sound_row.addWidget(self._low_sound_clear)
+        audio_layout.addLayout(low_sound_row)
+
+        audio_info = QLabel("MP3, WAV, or OGG up to 5 MB. Clear to use the built-in alarm.")
+        audio_info.setWordWrap(True)
+        audio_info.setStyleSheet(f"""
+            font-size: {FONTS["size_small"]};
+            color: {COLORS["gray_500"]};
+            padding: {SPACING["xs"]}px;
+        """)
+        audio_layout.addWidget(audio_info)
+
+        layout.addWidget(audio_group)
+
+        # ============================================================
         # Startup Toggle - Compact row (replaces bulky General Settings)
         # ============================================================
         startup_layout = QHBoxLayout()
         startup_layout.setSpacing(SPACING["sm"])
-        
+
         self._startup_check = QCheckBox("🔁 Start with Windows")
         self._startup_check.setStyleSheet(f"font-size: {FONTS['size_normal']};")
         self._startup_check.toggled.connect(self._on_startup_toggled)
         startup_layout.addWidget(self._startup_check)
         startup_layout.addStretch()
-        
+
         layout.addLayout(startup_layout)
 
         # ============================================================
@@ -2598,9 +2411,9 @@ class SettingsPanel(QWidget):
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
         self._status_label.setStyleSheet(f"""
-            color: {COLORS['gray_500']};
-            padding: {SPACING['xs']}px;
-            font-size: {FONTS['size_small']};
+            color: {COLORS["gray_500"]};
+            padding: {SPACING["xs"]}px;
+            font-size: {FONTS["size_small"]};
         """)
         layout.addWidget(self._status_label)
 
@@ -2615,13 +2428,13 @@ class SettingsPanel(QWidget):
         """Get current high threshold from AlarmService state machine."""
         if self._alarm_service:
             return self._alarm_service.state_machine.config.high_threshold
-        return self._settings.charge_threshold_high
+        return self._config.settings.charge_threshold_high
 
     def _get_current_low_threshold(self) -> int:
         """Get current low threshold from AlarmService state machine."""
         if self._alarm_service:
             return self._alarm_service.state_machine.config.low_threshold
-        return self._settings.charge_threshold_low
+        return self._config.settings.charge_threshold_low
 
     def _generate_time_options(self) -> list:
         """Generate time options for quiet hours."""
@@ -2647,7 +2460,7 @@ class SettingsPanel(QWidget):
             self._validation_msg.setVisible(False)
             self._save_btn.setEnabled(True)
             return True
-        except ValueError as e:
+        except (ValueError, ValidationError) as e:
             self._validation_msg.setText(f"⚠️ {e}")
             self._validation_msg.setVisible(True)
             self._save_btn.setEnabled(False)
@@ -2658,6 +2471,70 @@ class SettingsPanel(QWidget):
         self._quiet_start.setEnabled(checked)
         self._quiet_end.setEnabled(checked)
 
+    def _sound_line_edit(self, kind: str) -> QLineEdit:
+        """Return the line edit for the requested alarm sound."""
+        return self._full_sound_path if kind == "full" else self._low_sound_path
+
+    def _browse_sound(self, kind: str) -> None:
+        """Choose and copy a custom alarm sound into app data."""
+        audio_filter = " ".join(f"*{ext}" for ext in sorted(SUPPORTED_AUDIO_EXTENSIONS))
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Alarm Sound",
+            "",
+            f"Audio Files ({audio_filter});;All Files (*.*)",
+        )
+        if not file_path:
+            return
+
+        try:
+            source = validate_audio_file(file_path)
+            target = self._copy_custom_sound(source, kind)
+        except (ValidationError, OSError) as e:
+            QMessageBox.warning(self, "Invalid Sound File", str(e))
+            return
+
+        self._sound_line_edit(kind).setText(str(target))
+        self._status_label.setText(
+            f"✅ {'Full-charge' if kind == 'full' else 'Low-battery'} sound selected"
+        )
+        self._status_label.setStyleSheet(f"color: {COLORS['success']}; padding: {SPACING['xs']}px;")
+        QTimer.singleShot(3000, self._clear_status_label)
+
+    def _copy_custom_sound(self, source: Path, kind: str) -> Path:
+        """Copy a validated sound into the app data directory."""
+        target_dir = DATA_DIR / "custom_sounds"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        prefix = "full_charge" if kind == "full" else "low_battery"
+        target = target_dir / f"{prefix}_{uuid.uuid4().hex[:8]}{source.suffix.lower()}"
+        shutil.copy2(source, target)
+        logger.info("Custom %s alarm sound copied to %s", kind, target)
+        return target
+
+    def _clear_sound(self, kind: str) -> None:
+        """Clear a custom alarm sound so the default is used."""
+        self._sound_line_edit(kind).clear()
+
+    def _clear_status_label(self) -> None:
+        """Clear the status label if the panel still exists."""
+        try:
+            self._status_label.setText("")
+        except RuntimeError:
+            pass
+
+    def _validate_custom_sounds(self) -> bool:
+        """Validate configured custom sound paths before saving."""
+        for kind, label in (("full", "Full-charge"), ("low", "Low-battery")):
+            value = self._sound_line_edit(kind).text().strip()
+            if not value:
+                continue
+            try:
+                validate_audio_file(value)
+            except (ValidationError, OSError) as e:
+                QMessageBox.warning(self, "Invalid Sound File", f"{label}: {e}")
+                return False
+        return True
+
     # ============================================================
     # ✅ STARTUP TOGGLE HANDLER - Connects to Windows Registry
     # ============================================================
@@ -2667,20 +2544,21 @@ class SettingsPanel(QWidget):
             success = set_auto_start(checked)
             if success:
                 logger.info(f"✅ Auto-start {'enabled' if checked else 'disabled'}")
+                self._settings = self._config.settings
                 self._settings.start_with_os = checked
                 self._config.save()
-                self._status_label.setText(
-                    f"✅ Auto-start {'enabled' if checked else 'disabled'}"
+                self._status_label.setText(f"✅ Auto-start {'enabled' if checked else 'disabled'}")
+                self._status_label.setStyleSheet(
+                    f"color: {COLORS['success']}; padding: {SPACING['xs']}px;"
                 )
-                self._status_label.setStyleSheet(f"color: {COLORS['success']}; padding: {SPACING['xs']}px;")
-                QTimer.singleShot(3000, lambda: self._status_label.setText(""))
+                QTimer.singleShot(3000, self._clear_status_label)
             else:
                 self._startup_check.setChecked(not checked)
                 QMessageBox.warning(
                     self,
                     "Startup Setting Failed",
                     "Could not modify Windows startup setting.\n\n"
-                    "Please run the app as Administrator to enable this feature."
+                    "Please run the app as Administrator to enable this feature.",
                 )
         except Exception as e:
             logger.error(f"Failed to toggle startup: {e}")
@@ -2689,6 +2567,7 @@ class SettingsPanel(QWidget):
     @log_entry_exit()
     def load_settings(self) -> None:
         """Load settings from AlarmService state machine."""
+        self._settings = self._config.settings
         settings = self._settings
 
         high = self._get_current_high_threshold()
@@ -2699,14 +2578,15 @@ class SettingsPanel(QWidget):
         self._high_label.setText(f"{high}%")
         self._low_label.setText(f"{low}%")
 
-        quiet_enabled = (
-            settings.quiet_hours_start != "00:00" or settings.quiet_hours_end != "00:00"
-        )
+        quiet_enabled = settings.quiet_hours_start != "00:00" or settings.quiet_hours_end != "00:00"
         self._quiet_enabled.setChecked(quiet_enabled)
         self._quiet_start.setCurrentText(settings.quiet_hours_start)
         self._quiet_end.setCurrentText(settings.quiet_hours_end)
         self._quiet_start.setEnabled(quiet_enabled)
         self._quiet_end.setEnabled(quiet_enabled)
+
+        self._full_sound_path.setText(settings.custom_full_sound or "")
+        self._low_sound_path.setText(settings.custom_low_sound or "")
 
         # ✅ Startup checkbox - sync with registry
         registry_startup = is_auto_start_enabled()
@@ -2729,9 +2609,7 @@ class SettingsPanel(QWidget):
         """Save settings with validation."""
         if not self._validate_thresholds():
             QMessageBox.warning(
-                self,
-                "Invalid Settings",
-                "Please fix the validation errors before saving."
+                self, "Invalid Settings", "Please fix the validation errors before saving."
             )
             return
 
@@ -2742,39 +2620,61 @@ class SettingsPanel(QWidget):
             if self._quiet_enabled.isChecked():
                 quiet_start = self._quiet_start.currentText()
                 quiet_end = self._quiet_end.currentText()
+                if quiet_start == quiet_end:
+                    QMessageBox.warning(
+                        self,
+                        "Invalid Quiet Hours",
+                        "Quiet hours start and end times cannot be identical.",
+                    )
+                    return
+                try:
+                    validate_quiet_hours(quiet_start, quiet_end)
+                except ValidationError as e:
+                    QMessageBox.warning(self, "Invalid Quiet Hours", str(e))
+                    return
             else:
                 quiet_start = "00:00"
                 quiet_end = "00:00"
 
+            if not self._validate_custom_sounds():
+                return
+
+            full_sound = self._full_sound_path.text().strip() or None
+            low_sound = self._low_sound_path.text().strip() or None
+
             if self._alarm_service:
                 self._alarm_service.update_thresholds(high=high, low=low)
+                self._alarm_service.update_quiet_hours(
+                    self._quiet_enabled.isChecked(), quiet_start, quiet_end
+                )
                 logger.info("✅ AlarmService thresholds updated: high=%d%%, low=%d%%", high, low)
 
+            self._settings = self._config.settings
             self._settings.update(
                 charge_threshold_high=high,
                 charge_threshold_low=low,
                 quiet_hours_start=quiet_start,
                 quiet_hours_end=quiet_end,
+                custom_full_sound=full_sound,
+                custom_low_sound=low_sound,
                 start_with_os=self._startup_check.isChecked(),
             )
 
             self._config.save()
 
             self._status_label.setText("✅ Settings saved!")
-            self._status_label.setStyleSheet(f"color: {COLORS['success']}; padding: {SPACING['xs']}px;")
+            self._status_label.setStyleSheet(
+                f"color: {COLORS['success']}; padding: {SPACING['xs']}px;"
+            )
 
-            QTimer.singleShot(3000, lambda: self._status_label.setText(""))
+            QTimer.singleShot(3000, self._clear_status_label)
 
             self.settings_saved.emit()
             logger.info("✅ Settings saved")
 
         except Exception as e:
             logger.error("Failed to save settings: %s", e)
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to save settings: {e}"
-            )
+            QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
 
     def reset_settings(self) -> None:
         """Reset settings to defaults."""
@@ -2782,7 +2682,7 @@ class SettingsPanel(QWidget):
             self,
             "Reset Settings",
             "Are you sure you want to reset all settings to defaults?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
 
         if reply == QMessageBox.StandardButton.Yes:
@@ -2800,5 +2700,7 @@ class SettingsPanel(QWidget):
 
             self.load_settings()
             self._status_label.setText("↩️ Reset to defaults")
-            self._status_label.setStyleSheet(f"color: {COLORS['warning']}; padding: {SPACING['xs']}px;")
+            self._status_label.setStyleSheet(
+                f"color: {COLORS['warning']}; padding: {SPACING['xs']}px;"
+            )
             logger.info("Settings reset to defaults")

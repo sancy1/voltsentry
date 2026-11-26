@@ -206,52 +206,6 @@
 # DEFAULT_AGGREGATOR_PORT = int(os.getenv("DEFAULT_AGGREGATOR_PORT", "8080"))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
 FILE: src/voltsentry/core/constants.py
 PATH: voltsentry/src/voltsentry/core/constants.py
@@ -278,7 +232,7 @@ if ENV_FILE.exists():
 # ============================================================================
 APP_NAME = os.getenv("APP_NAME", "VoltSentry")
 APP_ID = os.getenv("APP_ID", "com.voltsentry.app")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "1.1.0")
 APP_ENV = os.getenv("APP_ENV", "development")
 DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 
@@ -300,6 +254,7 @@ if IS_WINDOWS:
     except Exception:
         pass
 
+
 # ============================================================================
 # Dynamic Path Helpers for Development and Packaged Executable
 # ============================================================================
@@ -307,7 +262,7 @@ def get_app_data_dir() -> Path:
     """
     Get the application data directory for user-specific files.
     Works for normal development AND PyInstaller packaged executables.
-    
+
     Returns:
         Path to app data folder (e.g., %LOCALAPPDATA%\VoltSentry)
     """
@@ -317,7 +272,7 @@ def get_app_data_dir() -> Path:
         base = Path.home() / "Library" / "Application Support"
     else:
         base = Path.home() / ".config"
-    
+
     app_data = base / APP_NAME
     app_data.mkdir(parents=True, exist_ok=True)
     return app_data
@@ -335,13 +290,13 @@ def get_resources_dir() -> Path:
     Get the resources directory (icons, sounds).
     Works for normal development AND PyInstaller packaged executables.
     """
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         # Running as a compiled PyInstaller executable
         base_path = Path(sys._MEIPASS)
     else:
         # Running in normal Python development environment
         base_path = Path(__file__).resolve().parent.parent
-    
+
     return base_path / "resources"
 
 
@@ -405,8 +360,21 @@ BATTERY_REPORT_PATH = DATA_DIR / "battery_report.xml"
 # ============================================================================
 FULL_CHARGE_SOUND = RESOURCES_DIR / "sounds" / "alarm_full_charge.mp3"
 LOW_BATTERY_SOUND = RESOURCES_DIR / "sounds" / "alarm_low_battery.mp3"
-MAX_CUSTOM_SOUND_SIZE = 5 * 1024 * 1024  # 5 MB
-SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg"}
+MAX_CUSTOM_SOUND_SIZE = 50 * 1024 * 1024  # 50 MB
+SUPPORTED_AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".oga",
+    ".opus",
+    ".flac",
+    ".m4a",
+    ".m4b",
+    ".aac",
+    ".wma",
+    ".aif",
+    ".aiff",
+}
 SNOOZE_DURATION_MINUTES = int(os.getenv("SNOOZE_DURATION_MINUTES", "15"))
 WEBHOOK_TIMEOUT = int(os.getenv("WEBHOOK_TIMEOUT", "10"))
 
@@ -442,9 +410,9 @@ PLATFORM_VERSION = platform.version()
 # UI Constants
 # ============================================================================
 TRAY_ICON_COLORS = {
-    "green": (60, 100),   # Healthy
-    "yellow": (20, 59),   # Moderate
-    "red": (0, 19),       # Critical
+    "green": (60, 100),  # Healthy
+    "yellow": (20, 59),  # Moderate
+    "red": (0, 19),  # Critical
 }
 TRAY_ICON_SIZE = 32  # pixels
 

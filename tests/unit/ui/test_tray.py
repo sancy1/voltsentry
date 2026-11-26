@@ -64,8 +64,8 @@ class TestTrayIcon:
 
         tray._toggle_pause()
         assert tray._is_paused is True
-        assert tray._pause_action.text() == "▶️ Resume Monitoring"
+        assert tray._pause_action.text() == "Resume Monitoring"
 
         tray._toggle_pause()
         assert tray._is_paused is False
-        assert tray._pause_action.text() == "⏸️ Pause Monitoring"
+        assert tray._pause_action.text() == "Pause Monitoring"

@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Callable, Optional, Protocol, TypeVar, TypedDict, Union
 
+
 # ============================================================================
 # Enums
 # ============================================================================
@@ -194,6 +195,8 @@ class ConfigData(TypedDict, total=False):
     quiet_hours_end: str
     alarm_volume: float
     custom_alarm_path: Optional[str]
+    custom_full_sound: Optional[str]
+    custom_low_sound: Optional[str]
     start_with_os: bool
     weekly_report_enabled: bool
     weekly_report_time: str  # HH:MM format

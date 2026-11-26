@@ -308,46 +308,6 @@
 #         return f"<AlarmService state={self._last_state}, last_percent={self._last_percent}%>"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # """
 # FILE: src/voltsentry/services/alarm_service.py
 # PATH: voltsentry/src/voltsentry/services/alarm_service.py
@@ -649,7 +609,7 @@
 #     def update_thresholds(self, high: int, low: int) -> None:
 #         """
 #         Update charge threshold limits.
-        
+
 #         Args:
 #             high: New high threshold (stop charging %)
 #             low: New low threshold (start charging %)
@@ -657,15 +617,15 @@
 #         # Update the state machine config
 #         self.state_machine.config.high_threshold = high
 #         self.state_machine.config.low_threshold = low
-        
+
 #         # Also update the config in memory
 #         settings = self.config.settings
 #         settings.charge_threshold_high = high
 #         settings.charge_threshold_low = low
-        
+
 #         # Save to disk
 #         self.config.save()
-        
+
 #         logger.info(
 #             "✅ Thresholds updated: high=%d%%, low=%d%%",
 #             high,
@@ -685,72 +645,6 @@
 
 #     def __repr__(self) -> str:
 #         return f"<AlarmService state={self._last_state}, last_percent={self._last_percent}%>"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 """
@@ -799,7 +693,7 @@ class AlarmService:
         self.state_machine = ThresholdStateMachine(
             config=ThresholdConfig(
                 high_threshold=settings.charge_threshold_high,  # ✅ From settings
-                low_threshold=settings.charge_threshold_low,    # ✅ From settings
+                low_threshold=settings.charge_threshold_low,  # ✅ From settings
                 critical_threshold=5,  # ✅ Fixed safety critical (5%)
                 hysteresis=HYSTERESIS_MARGIN,
             ),
@@ -809,17 +703,17 @@ class AlarmService:
         self.alarm_manager = AlarmManager(volume=settings.alarm_volume)
         self.notification_manager = NotificationManager()
         self.snooze_manager = SnoozeManager()
+        self._sync_quiet_hours_from_settings()
         self.repository = AlarmEventRepository()
 
         # Connect fallbacks
         self.alarm_manager.set_visual_only_callback(self._on_visual_only)
-        self.notification_manager.set_fallback_callback(
-            self._on_notification_fallback
-        )
+        self.notification_manager.set_fallback_callback(self._on_notification_fallback)
 
         self._last_state: Optional[ThresholdState] = None
         self._last_percent: Optional[int] = None
         self._was_snoozed: bool = False
+        self._alarm_acknowledged: bool = False
         self._last_charging: Optional[bool] = None  # Track charger state
 
         # Reference to system tray icon for visual flashing & toast pop-ups
@@ -836,6 +730,37 @@ class AlarmService:
         self._tray = tray
         logger.debug("Tray reference set in AlarmService")
 
+    def _sync_quiet_hours_from_settings(self) -> None:
+        """Apply persisted quiet-hours settings to the snooze manager."""
+        settings = self.config.settings
+        enabled = not (
+            settings.quiet_hours_start == "00:00" and settings.quiet_hours_end == "00:00"
+        )
+        self.snooze_manager.set_quiet_hours(
+            enabled=enabled,
+            start_time=settings.quiet_hours_start,
+            end_time=settings.quiet_hours_end,
+        )
+
+    def update_quiet_hours(
+        self,
+        enabled: bool,
+        start_time: str,
+        end_time: str,
+    ) -> None:
+        """Update quiet-hours configuration at runtime."""
+        self.snooze_manager.set_quiet_hours(
+            enabled=enabled,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        logger.info(
+            "Quiet hours updated: enabled=%s, %s-%s",
+            enabled,
+            start_time,
+            end_time,
+        )
+
     # ============================================================
     # ✅ STATE RESET METHODS
     # ============================================================
@@ -843,54 +768,55 @@ class AlarmService:
     def reset_alarm_state(self, reason: str = "Manual reset") -> None:
         """
         Reset all alarm state flags to allow fresh evaluation.
-        
+
         This is called when:
         - Charger is plugged/unplugged (automatic)
         - User clicks Refresh button
         - User clicks Reset State button
-        
+
         Args:
             reason: Why the reset was triggered (for logging)
         """
         logger.info("🔄 Resetting alarm state: %s", reason)
-        
+
         # Clear snooze state
         self._was_snoozed = False
         self.snooze_manager.clear_snooze()
-        
+
         # Stop any playing alarm
         if self.alarm_manager.is_playing:
             self.alarm_manager.stop()
-        
+
         # Reset state machine to force re-evaluation
-        # The state machine will re-evaluate on next reading
-        
+        self.state_machine.reset()
+        self._alarm_acknowledged = False
+
         # Clear tray alarm state
         if self._tray:
             self._tray.update_alarm(False)
             self._tray._stop_repeating_notification()
-        
+
         log_audit("INFO", f"Alarm state reset: {reason}")
         logger.info("✅ Alarm state reset complete")
 
     def _check_charger_state_transition(self, reading: BatteryReading) -> bool:
         """
         Check if charger state changed.
-        
+
         Returns:
             True if charger state changed, False otherwise
         """
         if self._last_charging is None:
             self._last_charging = reading.is_charging
             return False
-        
+
         if self._last_charging != reading.is_charging:
             old_state = "plugged" if self._last_charging else "unplugged"
             new_state = "plugged" if reading.is_charging else "unplugged"
             logger.info("🔌 Charger state changed: %s → %s", old_state, new_state)
             self._last_charging = reading.is_charging
             return True
-        
+
         self._last_charging = reading.is_charging
         return False
 
@@ -899,20 +825,22 @@ class AlarmService:
         """Process battery reading through threshold state machine."""
         try:
             self._last_percent = reading.percent
-            
+
             # ✅ Check for charger state transition
             if self._check_charger_state_transition(reading):
                 # Charger was plugged or unplugged - reset alarm state
                 self.reset_alarm_state(
                     reason=f"Charger state changed to {'plugged' if reading.is_charging else 'unplugged'}"
                 )
-            
+
             currently_snoozed = self.snooze_manager.is_snoozed()
             snooze_just_expired = self._was_snoozed and not currently_snoozed
             self._was_snoozed = currently_snoozed
 
             if snooze_just_expired:
                 logger.info("Snooze period expired; re-evaluating state")
+                # Force re-evaluation so the alarm re-fires if still in alarm state
+                self.state_machine.reset()
 
             if currently_snoozed:
                 logger.debug("Alarms suppressed due to active snooze")
@@ -926,9 +854,7 @@ class AlarmService:
                 exc_info=True,
             )
 
-    def _on_state_change(
-        self, old_state: ThresholdState, new_state: ThresholdState
-    ) -> None:
+    def _on_state_change(self, old_state: ThresholdState, new_state: ThresholdState) -> None:
         """Handle state transitions from state machine."""
         self._last_state = new_state
         logger.debug(
@@ -937,17 +863,32 @@ class AlarmService:
             new_state.name,
         )
 
-        if new_state == ThresholdState.FULL_ALARM:
-            self._trigger_alarm(AlarmType.FULL_CHARGE)
-        elif new_state == ThresholdState.LOW_ALARM:
-            self._trigger_alarm(AlarmType.LOW_BATTERY)
-        elif new_state == ThresholdState.CRITICAL_LOW:
-            self._trigger_alarm(AlarmType.CRITICAL_LOW)
-        elif new_state == ThresholdState.NORMAL:
+        if new_state == ThresholdState.NORMAL:
+            # Condition resolved - re-arm for the next alarm cycle
+            self._alarm_acknowledged = False
             self._clear_alarm()
+            return
+
+        alarm_type: Optional[AlarmType] = None
+        if new_state == ThresholdState.FULL_ALARM:
+            alarm_type = AlarmType.FULL_CHARGE
+        elif new_state == ThresholdState.LOW_ALARM:
+            alarm_type = AlarmType.LOW_BATTERY
+        elif new_state == ThresholdState.CRITICAL_LOW:
+            alarm_type = AlarmType.CRITICAL_LOW
+
+        if alarm_type is None:
+            return
+
+        if self._alarm_acknowledged:
+            logger.info("Alarm %s suppressed (acknowledged by user)", alarm_type.value)
+            return
+
+        self._trigger_alarm(alarm_type)
 
     def _trigger_alarm(self, alarm_type: AlarmType) -> None:
         """Trigger both audio sound and desktop notification."""
+        self._alarm_acknowledged = False
         logger.info(
             "🔔 Triggering alarm: %s (Battery at %s%%)",
             alarm_type.value,
@@ -958,9 +899,7 @@ class AlarmService:
         self._save_alarm_event(alarm_type)
 
         if self.snooze_manager.is_quiet_hours():
-            logger.info(
-                "Alarm %s suppressed (quiet hours active)", alarm_type.value
-            )
+            logger.info("Alarm %s suppressed (quiet hours active)", alarm_type.value)
             return
 
         settings = self.config.settings
@@ -968,20 +907,22 @@ class AlarmService:
         # Resolve optional custom sound file
         custom_sound_path: Optional[Path] = None
         if alarm_type == AlarmType.FULL_CHARGE:
-            custom_sound = getattr(settings, "custom_full_sound", None)
+            custom_sound = getattr(settings, "custom_full_sound", None) or getattr(
+                settings, "custom_alarm_path", None
+            )
             if custom_sound:
                 custom_sound_path = Path(custom_sound)
         elif alarm_type in (AlarmType.LOW_BATTERY, AlarmType.CRITICAL_LOW):
-            custom_sound = getattr(settings, "custom_low_sound", None)
+            custom_sound = getattr(settings, "custom_low_sound", None) or getattr(
+                settings, "custom_alarm_path", None
+            )
             if custom_sound:
                 custom_sound_path = Path(custom_sound)
 
         # ===== 1. PLAY AUDIO ALARM =====
         sound_played = False
         try:
-            sound_played = self.alarm_manager.play(
-                alarm_type, custom_sound_path=custom_sound_path
-            )
+            sound_played = self.alarm_manager.play(alarm_type, custom_sound_path=custom_sound_path)
             if sound_played:
                 logger.info("🔊 Alarm sound playing for: %s", alarm_type.value)
             else:
@@ -1004,9 +945,7 @@ class AlarmService:
             logger.info("🔔 Notification posted for: %s", alarm_type.value)
 
         except Exception as e:
-            logger.error(
-                "Failed to post desktop notification: %s", e, exc_info=True
-            )
+            logger.error("Failed to post desktop notification: %s", e, exc_info=True)
 
         log_audit("INFO", f"Alarm triggered: {alarm_type.value}")
 
@@ -1061,13 +1000,9 @@ class AlarmService:
             # Note: alarm_type is a string field, not an enum
             event = AlarmEvent(**event_kwargs)
             self.repository.save(event)
-            logger.debug(
-                "Alarm event saved to database: %s", alarm_type.value
-            )
+            logger.debug("Alarm event saved to database: %s", alarm_type.value)
         except Exception as e:
-            logger.error(
-                "Failed to save alarm event to database: %s", e, exc_info=True
-            )
+            logger.error("Failed to save alarm event to database: %s", e, exc_info=True)
 
     def _on_visual_only(self, alarm_type: AlarmType) -> None:
         """Fallback callback when audio playback fails entirely."""
@@ -1116,12 +1051,13 @@ class AlarmService:
         if self._tray:
             self._tray.update_alarm(False)
         self._was_snoozed = False
+        self._alarm_acknowledged = True
         logger.info("Alarm stopped manually")
 
     def update_thresholds(self, high: int, low: int) -> None:
         """
         Update charge threshold limits.
-        
+
         Args:
             high: New high threshold (stop charging %)
             low: New low threshold (start charging %)
@@ -1131,21 +1067,26 @@ class AlarmService:
             high_threshold=high,
             low_threshold=low,
         )
-        
+
         # Also update the config in memory
         settings = self.config.settings
         settings.charge_threshold_high = high
         settings.charge_threshold_low = low
-        
+
         # Save to disk
         self.config.save()
-        
+
         logger.info(
             "✅ Thresholds updated: high=%d%%, low=%d%%",
             high,
             low,
         )
         log_audit("INFO", f"Thresholds updated: high={high}%, low={low}%")
+
+    @property
+    def is_alarm_active(self) -> bool:
+        """True while an alarm condition is active and not acknowledged by the user."""
+        return self.state_machine.is_alarm_active and not self._alarm_acknowledged
 
     def get_status(self) -> dict:
         """Get current status of alarm service components."""
@@ -1159,5 +1100,3 @@ class AlarmService:
 
     def __repr__(self) -> str:
         return f"<AlarmService state={self._last_state}, last_percent={self._last_percent}%>"
-    
-    

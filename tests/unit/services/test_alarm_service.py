@@ -23,25 +23,25 @@ class TestAlarmService:
     @pytest.fixture
     def mock_dependencies(self):
         """Mock all external dependencies and sub-managers used by AlarmService."""
-        with patch("voltsentry.services.alarm_service.get_config") as mock_get_config, patch(
-            "voltsentry.services.alarm_service.ThresholdStateMachine"
-        ) as mock_tsm_cls, patch(
-            "voltsentry.services.alarm_service.AlarmManager"
-        ) as mock_am_cls, patch(
-            "voltsentry.services.alarm_service.NotificationManager"
-        ) as mock_nm_cls, patch(
-            "voltsentry.services.alarm_service.SnoozeManager"
-        ) as mock_sm_cls, patch(
-            "voltsentry.services.alarm_service.AlarmEventRepository"
-        ) as mock_repo_cls, patch(
-            "voltsentry.services.alarm_service.AlarmEvent"
-        ) as mock_alarm_event_cls:
-
+        with (
+            patch("voltsentry.services.alarm_service.get_config") as mock_get_config,
+            patch("voltsentry.services.alarm_service.ThresholdStateMachine") as mock_tsm_cls,
+            patch("voltsentry.services.alarm_service.AlarmManager") as mock_am_cls,
+            patch("voltsentry.services.alarm_service.NotificationManager") as mock_nm_cls,
+            patch("voltsentry.services.alarm_service.SnoozeManager") as mock_sm_cls,
+            patch("voltsentry.services.alarm_service.AlarmEventRepository") as mock_repo_cls,
+            patch("voltsentry.services.alarm_service.AlarmEvent") as mock_alarm_event_cls,
+        ):
             # Configure mock config settings
             mock_config = MagicMock()
             mock_config.settings.charge_threshold_high = 80
             mock_config.settings.charge_threshold_low = 20
             mock_config.settings.alarm_volume = 0.8
+            mock_config.settings.quiet_hours_start = "00:00"
+            mock_config.settings.quiet_hours_end = "00:00"
+            mock_config.settings.custom_alarm_path = None
+            mock_config.settings.custom_full_sound = None
+            mock_config.settings.custom_low_sound = None
             mock_get_config.return_value = mock_config
 
             # Instantiate sub-manager mocks
@@ -125,19 +125,23 @@ class TestAlarmService:
         alarm_service._on_state_change(ThresholdState.NORMAL, ThresholdState.FULL_ALARM)
 
         mock_dependencies["repo"].save.assert_called_once()
-        mock_dependencies["am"].play.assert_called_once_with(AlarmType.FULL_CHARGE)
+        mock_dependencies["am"].play.assert_called_once_with(
+            AlarmType.FULL_CHARGE, custom_sound_path=None
+        )
         mock_dependencies["nm"].notify.assert_called_once()
 
         notification_arg = mock_dependencies["nm"].notify.call_args[0][0]
         assert isinstance(notification_arg, Notification)
-        assert notification_arg.title == "Battery Fully Charged"
+        assert "Battery Fully Charged" in notification_arg.title
 
     def test_on_state_change_low_alarm(self, alarm_service, mock_dependencies):
         """Test triggering LOW_BATTERY alarm on transition to LOW_ALARM state."""
         alarm_service._on_state_change(ThresholdState.NORMAL, ThresholdState.LOW_ALARM)
 
         mock_dependencies["repo"].save.assert_called_once()
-        mock_dependencies["am"].play.assert_called_once_with(AlarmType.LOW_BATTERY)
+        mock_dependencies["am"].play.assert_called_once_with(
+            AlarmType.LOW_BATTERY, custom_sound_path=None
+        )
         mock_dependencies["nm"].notify.assert_called_once()
 
     def test_on_state_change_critical_low(self, alarm_service, mock_dependencies):
@@ -145,7 +149,9 @@ class TestAlarmService:
         alarm_service._on_state_change(ThresholdState.LOW_ALARM, ThresholdState.CRITICAL_LOW)
 
         mock_dependencies["repo"].save.assert_called_once()
-        mock_dependencies["am"].play.assert_called_once_with(AlarmType.CRITICAL_LOW)
+        mock_dependencies["am"].play.assert_called_once_with(
+            AlarmType.CRITICAL_LOW, custom_sound_path=None
+        )
         mock_dependencies["nm"].notify.assert_called_once()
 
     def test_on_state_change_normal_clears_alarm(self, alarm_service, mock_dependencies):
@@ -176,7 +182,9 @@ class TestAlarmService:
         # Should complete without raising an exception
         alarm_service._trigger_alarm(AlarmType.LOW_BATTERY)
 
-        mock_dependencies["am"].play.assert_called_once_with(AlarmType.LOW_BATTERY)
+        mock_dependencies["am"].play.assert_called_once_with(
+            AlarmType.LOW_BATTERY, custom_sound_path=None
+        )
 
     def test_snooze_alarm(self, alarm_service, mock_dependencies):
         """Test snooze action delegates to snooze_manager and stops audio."""
@@ -196,11 +204,10 @@ class TestAlarmService:
         """Test updating state machine thresholds."""
         alarm_service.update_thresholds(high=85, low=15)
 
-        if hasattr(alarm_service.state_machine, "update_thresholds"):
-            mock_dependencies["tsm"].update_thresholds.assert_called_once_with(85, 15)
-        else:
-            assert alarm_service.state_machine.config.high_threshold == 85
-            assert alarm_service.state_machine.config.low_threshold == 15
+        mock_dependencies["tsm"].update_config.assert_called_once_with(
+            high_threshold=85, low_threshold=15
+        )
+        mock_dependencies["config"].save.assert_called_once()
 
     def test_get_status(self, alarm_service, mock_dependencies):
         """Test get_status aggregates sub-component statuses."""

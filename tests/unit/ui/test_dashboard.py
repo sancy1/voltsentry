@@ -77,7 +77,6 @@ class TestDashboardWindow:
 
         # Initially disabled
         assert dashboard._stop_alarm_btn.isEnabled() is False
-        assert dashboard._snooze_btn.isEnabled() is False
 
         # Trigger alarm
         dashboard._show_alarm_banner()

@@ -4,7 +4,6 @@
 
 import json
 import shutil
-import tempfile
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime
 from pathlib import Path
@@ -52,6 +51,8 @@ class VoltSentrySettings:
     # Audio
     alarm_volume: float = DEFAULT_ALARM_VOLUME
     custom_alarm_path: Optional[str] = None
+    custom_full_sound: Optional[str] = None
+    custom_low_sound: Optional[str] = None
 
     # Startup
     start_with_os: bool = False
@@ -115,7 +116,10 @@ class VoltSentrySettings:
 
 
 class ConfigManager:
-    """Configuration manager handling thread-safe reads, atomic writes, auto-backup, and fallback."""
+    """Configuration manager.
+
+    Handles thread-safe reads, atomic writes, auto-backup, and fallback.
+    """
 
     def __init__(
         self,
@@ -159,7 +163,9 @@ class ConfigManager:
                     logger.warning("Backup recovery failed. Resetting configuration to defaults.")
                     self._settings = VoltSentrySettings()
                     self._reset_notified = True
-                    log_audit("WARNING", "Config reset to defaults (both primary and backup failed)")
+                    log_audit(
+                        "WARNING", "Config reset to defaults (both primary and backup failed)"
+                    )
                     return self._settings
 
     def _load_from_path(self, path: Path) -> VoltSentrySettings:
@@ -232,6 +238,7 @@ class ConfigManager:
             self.save()
 
     def __repr__(self) -> str:
+        """Return a concise representation of the config manager."""
         return (
             f"ConfigManager(path={self.config_path}, "
             f"loaded={self._settings is not None}, "
@@ -251,18 +258,23 @@ class GlobalConfig:
 
     @property
     def settings(self) -> VoltSentrySettings:
+        """Get the current application settings."""
         return self.manager.settings
 
     def load(self) -> VoltSentrySettings:
+        """Load settings from disk with fallback recovery."""
         return self.manager.load()
 
     def save(self) -> None:
+        """Persist current settings to disk atomically."""
         self.manager.save()
 
     def reset(self) -> None:
+        """Reset settings to defaults and save them."""
         self.manager.reset_to_defaults()
 
     def was_reset(self) -> bool:
+        """Return whether settings were reset by fallback recovery."""
         return self.manager.was_reset()
 
 

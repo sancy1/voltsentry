@@ -402,54 +402,6 @@
 #         return f"<DashboardWindow visible={self.isVisible()}>"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # """
 # FILE: src/voltsentry/ui/dashboard.py
 # PATH: voltsentry/src/voltsentry/ui/dashboard.py
@@ -876,79 +828,6 @@
 #         return f"<DashboardWindow visible={self.isVisible()}>"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # """
 # FILE: src/voltsentry/ui/dashboard.py
 # PATH: voltsentry/src/voltsentry/ui/dashboard.py
@@ -1039,7 +918,7 @@
 #         # ✅ Load icon for the window
 #         try:
 #             from ..utils import get_resource_path
-            
+
 #             # Try PNG first (better quality)
 #             icon_path = get_resource_path("assets/icon.png")
 #             if icon_path.exists():
@@ -1392,77 +1271,6 @@
 #         return f"<DashboardWindow visible={self.isVisible()}>"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
 FILE: src/voltsentry/ui/dashboard.py
 PATH: voltsentry/src/voltsentry/ui/dashboard.py
@@ -1498,8 +1306,10 @@ from ..core.constants import APP_ID, APP_NAME, APP_VERSION
 from ..core.decorators import log_entry_exit
 from ..core.logging_config import get_logger
 from ..core.types import BatteryReading
+from ..db.repositories import CalibrationRepository, ChargeCycleRepository
 from ..services.alarm_service import AlarmService
 from ..services.battery_poller import BatteryPoller
+from ..services.battery_report import BatteryReportService
 from .health_graph import HealthGraph
 from .history_log import HistoryLogView
 from .settings_panel import SettingsPanel
@@ -1530,11 +1340,13 @@ class DashboardWindow(QMainWindow):
         self,
         poller: Optional[BatteryPoller] = None,
         alarm_service: Optional[AlarmService] = None,
+        report_service: Optional[BatteryReportService] = None,
     ):
         super().__init__()
 
         self._poller = poller
         self._alarm_service = alarm_service
+        self._report_service = report_service
         self._config = get_config()
 
         self._setup_window()
@@ -1554,7 +1366,7 @@ class DashboardWindow(QMainWindow):
         # ✅ Load icon for the window
         try:
             from ..utils import get_resource_path
-            
+
             # Try PNG first (better quality)
             icon_path = get_resource_path("assets/icon.png")
             if icon_path.exists():
@@ -1575,9 +1387,7 @@ class DashboardWindow(QMainWindow):
         self.setCentralWidget(central)
 
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(
-            SPACING["lg"], SPACING["lg"], SPACING["lg"], SPACING["lg"]
-        )
+        main_layout.setContentsMargins(SPACING["lg"], SPACING["lg"], SPACING["lg"], SPACING["lg"])
         main_layout.setSpacing(SPACING["md"])
 
         # Header
@@ -1595,7 +1405,11 @@ class DashboardWindow(QMainWindow):
         # Tab widget
         self._tab_widget = QTabWidget()
 
-        self._settings_panel = SettingsPanel(self._config, parent=self)
+        self._settings_panel = SettingsPanel(
+            self._config,
+            alarm_service=self._alarm_service,
+            parent=self,
+        )
         self._tab_widget.addTab(self._settings_panel, "⚙️ Settings")
 
         self._health_graph = HealthGraph(parent=self)
@@ -1617,9 +1431,9 @@ class DashboardWindow(QMainWindow):
 
         title = QLabel(f"🔋 {APP_NAME}")
         title.setStyleSheet(f"""
-            font-size: {FONTS['size_large']};
-            font-weight: {FONTS['weight_bold']};
-            color: {COLORS['gray_900']};
+            font-size: {FONTS["size_large"]};
+            font-weight: {FONTS["weight_bold"]};
+            color: {COLORS["gray_900"]};
         """)
         header_layout.addWidget(title)
         header_layout.addStretch()
@@ -1677,9 +1491,9 @@ class DashboardWindow(QMainWindow):
 
         actions_title = QLabel("⚡ Actions")
         actions_title.setStyleSheet(f"""
-            font-size: {FONTS['size_small']};
-            font-weight: {FONTS['weight_medium']};
-            color: {COLORS['gray_600']};
+            font-size: {FONTS["size_small"]};
+            font-weight: {FONTS["weight_medium"]};
+            color: {COLORS["gray_600"]};
         """)
         actions_layout.addWidget(actions_title)
 
@@ -1691,12 +1505,6 @@ class DashboardWindow(QMainWindow):
         self._stop_alarm_btn.setEnabled(False)
         self._stop_alarm_btn.clicked.connect(self._stop_alarm)
         btn_layout.addWidget(self._stop_alarm_btn)
-
-        self._snooze_btn = QPushButton("😴 Snooze")
-        self._snooze_btn.setObjectName("primaryButton")
-        self._snooze_btn.setEnabled(False)
-        self._snooze_btn.clicked.connect(self._snooze_alarm)
-        btn_layout.addWidget(self._snooze_btn)
 
         self._refresh_btn = QPushButton("🔄 Refresh")
         self._refresh_btn.clicked.connect(self._refresh)
@@ -1713,8 +1521,8 @@ class DashboardWindow(QMainWindow):
 
         self._actions_card.setStyleSheet(f"""
             QFrame {{
-                background-color: {COLORS['gray_100']};
-                border-radius: {RADIUS['lg']}px;
+                background-color: {COLORS["gray_100"]};
+                border-radius: {RADIUS["lg"]}px;
             }}
         """)
 
@@ -1726,8 +1534,8 @@ class DashboardWindow(QMainWindow):
         self.statusBar().showMessage(f"Ready | {APP_ID}")
         self.statusBar().setStyleSheet(f"""
             QStatusBar {{
-                color: {COLORS['gray_500']};
-                font-size: {FONTS['size_small']};
+                color: {COLORS["gray_500"]};
+                font-size: {FONTS["size_small"]};
             }}
         """)
 
@@ -1750,9 +1558,7 @@ class DashboardWindow(QMainWindow):
             is_charging = reading.is_charging
 
             self._battery_card.set_value(f"{percent}%")
-            self._battery_card.set_subtitle(
-                "⚡ Charging" if is_charging else "🔋 Discharging"
-            )
+            self._battery_card.set_subtitle("⚡ Charging" if is_charging else "🔋 Discharging")
 
             if percent >= 60:
                 status = "success"
@@ -1764,16 +1570,12 @@ class DashboardWindow(QMainWindow):
 
             status_text = "Charging" if is_charging else "Discharging"
             self._status_card.set_value(status_text)
-            self._status_card.set_subtitle(
-                f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
-            )
+            self._status_card.set_subtitle(f"Last updated: {datetime.now().strftime('%H:%M:%S')}")
+            self._refresh_health_card()
 
             self.statusBar().showMessage(f"Battery: {percent}% | {status_text}")
 
-            if (
-                self._alarm_service
-                and self._alarm_service.state_machine.is_alarm_active
-            ):
+            if self._alarm_service and self._alarm_service.is_alarm_active:
                 self._show_alarm_banner()
 
         except Exception as e:
@@ -1832,16 +1634,12 @@ class DashboardWindow(QMainWindow):
                 alarm_type = self._alarm_service.alarm_manager.active_alarm
                 if alarm_type:
                     messages = {
-                        "full_charge": (
-                            "🔔 Battery fully charged! Unplug to extend battery life."
-                        ),
+                        "full_charge": ("🔔 Battery fully charged! Unplug to extend battery life."),
                         "low_battery": "⚠️ Battery low! Plug in to charge.",
                         "critical_low": "🔴 Battery critical! Plug in immediately!",
                     }
                     message = messages.get(alarm_type.value, "🔔 Alarm active!")
-                    alert_type = (
-                        "danger" if alarm_type.value == "critical_low" else "warning"
-                    )
+                    alert_type = "danger" if alarm_type.value == "critical_low" else "warning"
 
                     # Show alert - THIS WILL PUSH CONTENT DOWN
                     self._alert_banner.show_alert(
@@ -1851,7 +1649,6 @@ class DashboardWindow(QMainWindow):
                     )
 
                     self._stop_alarm_btn.setEnabled(True)
-                    self._snooze_btn.setEnabled(True)
         except Exception as e:
             logger.error("Error showing alarm banner in panel alert_banner: %s", e)
 
@@ -1862,7 +1659,6 @@ class DashboardWindow(QMainWindow):
                 self._alarm_service.stop_alarm()
                 self._alert_banner.dismiss()
                 self._stop_alarm_btn.setEnabled(False)
-                self._snooze_btn.setEnabled(False)
                 self.statusBar().showMessage("🔕 Alarm stopped", 2000)
         except Exception as e:
             logger.error("Error stopping alarm in panel actions: %s", e)
@@ -1874,7 +1670,6 @@ class DashboardWindow(QMainWindow):
                 self._alarm_service.snooze_alarm()
                 self._alert_banner.dismiss()
                 self._stop_alarm_btn.setEnabled(False)
-                self._snooze_btn.setEnabled(False)
                 self.statusBar().showMessage("😴 Alarm snoozed for 15 minutes", 2000)
         except Exception as e:
             logger.error("Error snoozing alarm in panel actions: %s", e)
@@ -1889,17 +1684,18 @@ class DashboardWindow(QMainWindow):
             # ✅ Reset alarm state first
             if self._alarm_service:
                 self._alarm_service.reset_alarm_state(reason="User clicked Refresh button")
-            
+
             # Then refresh UI data
             self._health_graph.refresh()
             self._history_log.refresh()
-            
+            self._refresh_health_card()
+
             # Force immediate battery check
             if self._poller and self._poller.current_reading:
                 reading = self._poller.current_reading
                 if self._alarm_service:
                     self._alarm_service.process_reading(reading)
-            
+
             self.statusBar().showMessage("🔄 Refreshed and state reset", 1000)
         except Exception as e:
             logger.error("Error refreshing in dashboard panels: %s", e)
@@ -1914,28 +1710,76 @@ class DashboardWindow(QMainWindow):
             if self._alarm_service:
                 # Reset alarm state
                 self._alarm_service.reset_alarm_state(reason="User clicked Reset State button")
-                
+
                 # Clear alert banner
                 self._alert_banner.dismiss()
                 self._stop_alarm_btn.setEnabled(False)
-                self._snooze_btn.setEnabled(False)
-                
+
                 # Force immediate battery check
                 if self._poller and self._poller.current_reading:
                     reading = self._poller.current_reading
                     self._alarm_service.process_reading(reading)
-                
-                self.statusBar().showMessage("✅ State reset successfully - monitoring active", 3000)
+
+                self.statusBar().showMessage(
+                    "✅ State reset successfully - monitoring active", 3000
+                )
                 logger.info("User manually reset alarm state")
         except Exception as e:
             logger.error("Error resetting state: %s", e)
             self.statusBar().showMessage("❌ Failed to reset state", 2000)
+
+    def _refresh_health_card(self) -> None:
+        """Refresh the health score and cycle count card."""
+        try:
+            health_score = None
+            cycle_count = None
+            source = "estimated"
+
+            if self._report_service:
+                try:
+                    snapshot = self._report_service.get_health_snapshot()
+                    health_score = snapshot.health_score
+                    cycle_count = snapshot.cycle_count
+                    source = snapshot.source.value
+                except Exception as e:
+                    logger.debug("Health snapshot unavailable: %s", e)
+
+            if health_score is None:
+                best_score = CalibrationRepository().get_best_health_score()
+                if best_score is not None:
+                    health_score = float(best_score)
+                    source = "calibration"
+
+            if cycle_count is None:
+                try:
+                    cycle_count = ChargeCycleRepository().get_total_cycles()
+                except Exception as e:
+                    logger.debug("Cycle count unavailable: %s", e)
+
+            if health_score is None:
+                self._health_card.set_value("--%")
+                status = "info"
+            else:
+                self._health_card.set_value(f"{health_score:.0f}%")
+                if health_score >= 80:
+                    status = "success"
+                elif health_score >= 60:
+                    status = "warning"
+                else:
+                    status = "danger"
+
+            cycles_text = f"{int(cycle_count)}" if cycle_count is not None else "--"
+            self._health_card.set_subtitle(f"Cycles: {cycles_text} | {source}")
+            self._health_card.set_status(status)
+        except Exception as e:
+            logger.error("Error refreshing health card: %s", e)
 
     def _update_ui(self) -> None:
         """Initial UI update."""
         self._settings_panel.load_settings()
         self._health_graph.refresh()
         self._history_log.refresh()
+        self._refresh_health_card()
 
     def show_event(self) -> None:
         """Show and activate the window."""
@@ -1955,5 +1799,3 @@ class DashboardWindow(QMainWindow):
 
     def __repr__(self) -> str:
         return f"<DashboardWindow visible={self.isVisible()}>"
-    
-    

@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 
 class AlarmType(Enum):
     """Types of alarms."""
+
     NONE = "none"
     FULL_CHARGE = "full_charge"
     LOW_BATTERY = "low_battery"
@@ -28,6 +29,7 @@ class AlarmType(Enum):
 @dataclass
 class AlarmProfile:
     """Configuration for an alarm sound."""
+
     name: str
     sound_path: Path
     loop: bool = True
@@ -73,13 +75,15 @@ class AlarmManager:
         # Initialize pygame
         self._init_pygame()
 
-        logger.info("AlarmManager initialized: volume=%.2f, pygame=%s", 
-                   self.volume, self._pygame_available)
+        logger.info(
+            "AlarmManager initialized: volume=%.2f, pygame=%s", self.volume, self._pygame_available
+        )
 
     def _init_pygame(self) -> None:
         """Initialize pygame mixer."""
         try:
             import pygame
+
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
             self._pygame_available = True
             logger.info("✅ Pygame initialized - MP3 playback ready")
@@ -113,8 +117,12 @@ class AlarmManager:
         with self._lock:
             # Priority check
             if self._active_alarm is not None:
-                current_priority = ALARM_PROFILES.get(self._active_alarm, AlarmProfile("", Path(), priority=0)).priority
-                new_priority = ALARM_PROFILES.get(alarm_type, AlarmProfile("", Path(), priority=0)).priority
+                current_priority = ALARM_PROFILES.get(
+                    self._active_alarm, AlarmProfile("", Path(), priority=0)
+                ).priority
+                new_priority = ALARM_PROFILES.get(
+                    alarm_type, AlarmProfile("", Path(), priority=0)
+                ).priority
                 if alarm_type == AlarmType.CRITICAL_LOW:
                     logger.info("CRITICAL_LOW overriding current")
                 elif new_priority < current_priority:
@@ -125,7 +133,10 @@ class AlarmManager:
                 logger.error("Unknown alarm type: %s", alarm_type)
                 return False
 
-            sound_path = custom_sound_path if custom_sound_path and custom_sound_path.exists() else profile.sound_path
+            custom_path = (
+                custom_sound_path if custom_sound_path and custom_sound_path.exists() else None
+            )
+            sound_path = custom_path or profile.sound_path
             self._active_alarm = alarm_type
             self._active_profile = profile
 
@@ -138,6 +149,12 @@ class AlarmManager:
             # Try pygame (supports MP3 directly!)
             if self._pygame_available:
                 success = self._play_mp3(sound_path)
+                if not success and custom_path and custom_path != profile.sound_path:
+                    logger.warning(
+                        "Custom sound failed; falling back to default: %s",
+                        profile.sound_path,
+                    )
+                    success = self._play_mp3(profile.sound_path)
 
             # Fallback to Windows beep
             if not success:
@@ -194,6 +211,7 @@ class AlarmManager:
         """Fallback to Windows beep."""
         try:
             import winsound
+
             winsound.Beep(800, 400)
             time.sleep(0.1)
             winsound.Beep(1000, 400)
@@ -223,6 +241,7 @@ class AlarmManager:
 
             try:
                 import pygame
+
                 pygame.mixer.music.stop()
                 pygame.mixer.music.unload()
                 logger.debug("Alarm stopped")

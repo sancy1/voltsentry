@@ -453,78 +453,6 @@
 #     sys.exit(main())
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # """
 # FILE: src/voltsentry/app.py
 # PATH: voltsentry/src/voltsentry/app.py
@@ -574,28 +502,28 @@
 # def load_app_icon(app: QApplication) -> bool:
 #     """
 #     Load the application icon dynamically.
-    
+
 #     Args:
 #         app: QApplication instance
-    
+
 #     Returns:
 #         True if icon was loaded, False otherwise
 #     """
 #     # Try PNG first (better quality for window header)
 #     icon_path = get_resource_path("assets/icon.png")
-    
+
 #     if icon_path.exists():
 #         app.setWindowIcon(QIcon(str(icon_path)))
 #         logger.info("✅ Application icon loaded from: %s", icon_path)
 #         return True
-    
+
 #     # Try ICO as fallback (better for .exe)
 #     icon_path = get_resource_path("assets/icon.ico")
 #     if icon_path.exists():
 #         app.setWindowIcon(QIcon(str(icon_path)))
 #         logger.info("✅ Application icon loaded from: %s", icon_path)
 #         return True
-    
+
 #     logger.warning("⚠️ No icon found in assets folder")
 #     return False
 
@@ -1021,88 +949,6 @@
 #     sys.exit(main())
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
 FILE: src/voltsentry/app.py
 PATH: voltsentry/src/voltsentry/app.py
@@ -1152,28 +998,28 @@ logger = get_logger(__name__)
 def load_app_icon(app: QApplication) -> bool:
     """
     Load the application icon dynamically.
-    
+
     Args:
         app: QApplication instance
-    
+
     Returns:
         True if icon was loaded, False otherwise
     """
     # Try PNG first (better quality for window header)
     icon_path = get_resource_path("assets/icon.png")
-    
+
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
         logger.info("✅ Application icon loaded from: %s", icon_path)
         return True
-    
+
     # Try ICO as fallback (better for .exe)
     icon_path = get_resource_path("assets/icon.ico")
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
         logger.info("✅ Application icon loaded from: %s", icon_path)
         return True
-    
+
     logger.warning("⚠️ No icon found in assets folder")
     return False
 
@@ -1285,9 +1131,7 @@ class VoltSentryApplication:
             return True
 
         except Exception as e:
-            logger.critical(
-                "Failed to initialize application: %s", e, exc_info=True
-            )
+            logger.critical("Failed to initialize application: %s", e, exc_info=True)
             log_audit("CRITICAL", f"Application initialization failed: {e}")
 
             if self._app:
@@ -1312,9 +1156,7 @@ class VoltSentryApplication:
         self._power_draw = get_power_draw_monitor()
 
         # Battery Poller
-        self._poller = BatteryPoller(
-            poll_interval=get_config().settings.poll_interval_seconds
-        )
+        self._poller = BatteryPoller(poll_interval=get_config().settings.poll_interval_seconds)
 
         # Alarm Service
         self._alarm_service = AlarmService()
@@ -1344,7 +1186,9 @@ class VoltSentryApplication:
 
         # Dashboard - icon is set globally via QApplication
         self._dashboard = DashboardWindow(
-            poller=self._poller, alarm_service=self._alarm_service
+            poller=self._poller,
+            alarm_service=self._alarm_service,
+            report_service=self._report_service,
         )
 
         # Tray
@@ -1360,15 +1204,9 @@ class VoltSentryApplication:
         # 1. Battery Poller → Dashboard
         # ============================================================
         if self._poller and self._dashboard:
-            self._poller.reading_updated.connect(
-                self._dashboard._on_reading_updated
-            )
-            self._poller.state_changed.connect(
-                self._dashboard._on_state_changed
-            )
-            self._poller.error_occurred.connect(
-                self._dashboard._on_poller_error
-            )
+            self._poller.reading_updated.connect(self._dashboard._on_reading_updated)
+            self._poller.state_changed.connect(self._dashboard._on_state_changed)
+            self._poller.error_occurred.connect(self._dashboard._on_poller_error)
             logger.debug("Poller → Dashboard connected")
 
         # ============================================================
@@ -1378,27 +1216,21 @@ class VoltSentryApplication:
             self._poller.reading_updated.connect(
                 lambda r: self._tray.update_battery(r.percent, r.is_charging)
             )
-            self._poller.error_occurred.connect(
-                lambda e: self._tray.setToolTip(f"⚠️ Error: {e}")
-            )
+            self._poller.error_occurred.connect(lambda e: self._tray.setToolTip(f"⚠️ Error: {e}"))
             logger.debug("Poller → Tray connected")
 
         # ============================================================
         # 3. Battery Poller → Alarm Service
         # ============================================================
         if self._poller and self._alarm_service:
-            self._poller.reading_updated.connect(
-                self._alarm_service.process_reading
-            )
+            self._poller.reading_updated.connect(self._alarm_service.process_reading)
             logger.debug("Poller → Alarm Service connected")
 
         # ============================================================
         # 4. Battery Poller → Heartbeat
         # ============================================================
         if self._poller and self._heartbeat:
-            self._poller.reading_updated.connect(
-                lambda r: self._heartbeat.beat()
-            )
+            self._poller.reading_updated.connect(lambda r: self._heartbeat.beat())
             logger.debug("Poller → Heartbeat connected")
 
         # ============================================================
@@ -1412,17 +1244,13 @@ class VoltSentryApplication:
         # 6. Alarm Service → Dashboard (via state machine)
         # ============================================================
         if self._alarm_service and self._dashboard:
-            logger.debug(
-                "Alarm Service → Dashboard connected (via state machine)"
-            )
+            logger.debug("Alarm Service → Dashboard connected (via state machine)")
 
         # ============================================================
         # 7. Tray → Dashboard
         # ============================================================
         if self._tray and self._dashboard:
-            self._tray.dashboard_requested.connect(
-                self._dashboard.show_event
-            )
+            self._tray.dashboard_requested.connect(self._dashboard.show_event)
             self._tray.settings_requested.connect(
                 lambda: self._dashboard._tab_widget.setCurrentIndex(0)
             )
@@ -1441,9 +1269,7 @@ class VoltSentryApplication:
         # 9. Watchdog → Tray (for failure notifications)
         # ============================================================
         if self._watchdog and self._tray:
-            self._watchdog.add_failure_callback(
-                lambda msg: self._tray.setToolTip(f"⚠️ {msg}")
-            )
+            self._watchdog.add_failure_callback(lambda msg: self._tray.setToolTip(f"⚠️ {msg}"))
             logger.debug("Watchdog → Tray connected")
 
         logger.info("All signals connected")
@@ -1563,21 +1389,11 @@ class VoltSentryApplication:
             "initialized": self._initialized,
             "running": self._running,
             "poller": self._poller.get_state_info() if self._poller else None,
-            "alarm": (
-                self._alarm_service.get_status()
-                if self._alarm_service
-                else None
-            ),
-            "heartbeat": (
-                self._heartbeat.get_status() if self._heartbeat else None
-            ),
-            "watchdog": (
-                self._watchdog.get_status() if self._watchdog else None
-            ),
+            "alarm": (self._alarm_service.get_status() if self._alarm_service else None),
+            "heartbeat": (self._heartbeat.get_status() if self._heartbeat else None),
+            "watchdog": (self._watchdog.get_status() if self._watchdog else None),
             "tray_visible": self._tray.isVisible() if self._tray else False,
-            "dashboard_visible": (
-                self._dashboard.isVisible() if self._dashboard else False
-            ),
+            "dashboard_visible": (self._dashboard.isVisible() if self._dashboard else False),
         }
 
 

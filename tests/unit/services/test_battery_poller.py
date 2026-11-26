@@ -7,20 +7,18 @@ PHASE: 2.1 - Battery Polling Service
 
 from unittest.mock import MagicMock, patch
 
-from PyQt6.QtCore import QCoreApplication
+from PyQt6.QtWidgets import QApplication
 import pytest
 
-from voltsentry.core.exceptions import BatteryReadError
-from voltsentry.core.types import BatteryReading, ChargingState, HealthSource
 from voltsentry.services.battery_poller import BatteryPoller
 
 
 @pytest.fixture(scope="module")
 def qapp():
-    """Ensure a QCoreApplication instance exists for Qt signals/timers."""
-    app = QCoreApplication.instance()
+    """Ensure a QApplication instance exists for Qt signals/timers."""
+    app = QApplication.instance()
     if app is None:
-        app = QCoreApplication([])
+        app = QApplication([])
     yield app
 
 
